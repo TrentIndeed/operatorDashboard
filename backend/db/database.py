@@ -251,6 +251,26 @@ class WaitlistSignup(Base):
     signed_up_at = Column(DateTime, default=datetime.utcnow)
 
 
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, nullable=False, unique=True)
+    email = Column(String)
+    password_hash = Column(String, nullable=False)
+    # Plan: "local" (self-hosted) | "starter" | "pro"
+    plan = Column(String, default="local")
+    # Stripe
+    stripe_customer_id = Column(String)
+    stripe_subscription_id = Column(String)
+    subscription_status = Column(String, default="none")  # none | active | past_due | canceled
+    # Cloud instance
+    instance_ip = Column(String)
+    instance_id = Column(String)  # Hetzner server ID
+    instance_status = Column(String, default="none")  # none | provisioning | running | stopped | error
+    instance_domain = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 def get_db():
     db = SessionLocal()
     try:

@@ -16,10 +16,11 @@ import {
   Zap,
   Menu,
   X,
+  LogOut,
 } from "lucide-react";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Command Center", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Command Center", icon: LayoutDashboard },
   { href: "/content", label: "Content Studio", icon: FileText },
   { href: "/analytics", label: "Analytics", icon: BarChart2 },
   { href: "/stats", label: "Stats", icon: TrendingUp },
@@ -108,18 +109,30 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="px-5 py-4 border-t border-white/[0.06]">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full gradient-cyan flex items-center justify-center text-[11px] font-bold text-white">
-            {process.env.NEXT_PUBLIC_INITIALS || "OP"}
-          </div>
-          <div>
-            <div className="text-[13px] font-semibold text-white">
-              {process.env.NEXT_PUBLIC_DISPLAY_NAME || "Operator"}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full gradient-cyan flex items-center justify-center text-[11px] font-bold text-white">
+              {process.env.NEXT_PUBLIC_INITIALS || "OP"}
             </div>
-            <div className="text-[11px] text-[var(--muted-foreground)]">
-              {process.env.NEXT_PUBLIC_TAGLINE || "solo founder mode"}
+            <div>
+              <div className="text-[13px] font-semibold text-white">
+                {process.env.NEXT_PUBLIC_DISPLAY_NAME || "Operator"}
+              </div>
+              <div className="text-[11px] text-[var(--muted-foreground)]">
+                {process.env.NEXT_PUBLIC_TAGLINE || "solo founder mode"}
+              </div>
             </div>
           </div>
+          <button
+            onClick={() => {
+              document.cookie = "operator_token=; path=/; max-age=0";
+              window.location.href = "/landing";
+            }}
+            className="p-2 rounded-lg hover:bg-white/[0.06] text-[var(--muted-foreground)] hover:text-white transition-colors"
+            title="Log out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </>
@@ -128,7 +141,7 @@ export function Sidebar() {
   return (
     <>
       {/* Mobile top bar */}
-      <div className="fixed top-0 left-0 right-0 h-14 bg-[var(--sidebar)] border-b border-white/[0.06] z-50 flex items-center px-4 lg:hidden">
+      <div className="fixed top-0 left-0 right-0 h-14 bg-[var(--sidebar)] border-b border-white/[0.06] z-40 flex items-center px-4 lg:hidden">
         <button
           onClick={() => setMobileOpen(true)}
           className="p-2 rounded-lg hover:bg-white/[0.06] text-white"
@@ -146,7 +159,7 @@ export function Sidebar() {
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-50 lg:hidden"
+          className="fixed inset-0 bg-black/70 z-[70] lg:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
@@ -154,9 +167,9 @@ export function Sidebar() {
       {/* Sidebar — desktop: always visible, mobile: slide in */}
       <aside
         className={cn(
-          "fixed left-0 top-0 h-full w-60 flex flex-col border-r border-white/[0.06] bg-[var(--sidebar)] z-50 transition-transform duration-200",
-          "lg:translate-x-0",
-          mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          "fixed left-0 top-0 h-full w-64 flex flex-col border-r border-white/[0.06] bg-[var(--sidebar)] transition-transform duration-200",
+          "lg:w-60 lg:translate-x-0 lg:z-40",
+          mobileOpen ? "translate-x-0 z-[80]" : "-translate-x-full lg:translate-x-0"
         )}
       >
         {sidebarContent}

@@ -25,6 +25,7 @@ from api.market_intel import router as market_intel_router
 from api.leads import router as leads_router
 from api.google_auth import router as google_auth_router
 from api.social_sync import router as social_sync_router
+from api.billing import router as billing_router
 
 
 @asynccontextmanager
@@ -37,107 +38,9 @@ async def lifespan(app: FastAPI):
 
 
 def _seed_initial_data():
-    """Seed the DB with starter projects and goals if empty."""
-    from db.database import SessionLocal
-    db = SessionLocal()
-    try:
-        if db.query(Project).count() > 0:
-            return  # Already seeded
-
-        # Example seed projects — customize these for your own use
-        projects = [
-            Project(
-                name="Main Product",
-                slug="main-product",
-                description="Your primary SaaS or product",
-                current_stage=0,
-                total_stages=6,
-                stage_label="Getting started",
-                blockers=None,
-                next_milestone="Define MVP scope",
-                github_repo="",
-                color="#3b82f6",
-            ),
-            Project(
-                name="Content Engine",
-                slug="content-engine",
-                description="Content creation and distribution pipeline",
-                current_stage=0,
-                total_stages=4,
-                stage_label="Setup",
-                blockers=None,
-                next_milestone="First content published",
-                github_repo="",
-                color="#8b5cf6",
-            ),
-            Project(
-                name="Open Source",
-                slug="open-source",
-                description="Open-source tools and workflows",
-                current_stage=0,
-                total_stages=3,
-                stage_label="Planning",
-                blockers=None,
-                next_milestone="First repo published",
-                github_repo="",
-                color="#10b981",
-            ),
-            Project(
-                name="Operator Dashboard",
-                slug="operator-dashboard",
-                description="This dashboard — AI-powered solo founder command center",
-                current_stage=1,
-                total_stages=5,
-                stage_label="Phase 1: Foundation",
-                blockers=None,
-                next_milestone="Phase 2: Content Engine",
-                github_repo="",
-                color="#f59e0b",
-            ),
-        ]
-        db.add_all(projects)
-
-        # Example seed goals — customize for your own projects
-        goals = [
-            # This week
-            Goal(title="Define MVP feature set", timeframe="week", progress=0.0, project_slug="main-product"),
-            Goal(title="Film and edit 3 short-form videos", timeframe="week", progress=0.0, project_slug="content-engine"),
-            Goal(title="Operator dashboard Phase 1 complete", timeframe="week", progress=0.0, project_slug="operator-dashboard"),
-            # This month
-            Goal(title="Reach 1,000 waitlist signups", timeframe="month", progress=0.0, project_slug="main-product"),
-            Goal(title="Post 20 pieces of content across platforms", timeframe="month", progress=0.0, project_slug="content-engine"),
-            Goal(title="Publish 2 open-source repos", timeframe="month", progress=0.0, project_slug="open-source"),
-            # This quarter
-            Goal(title="Launch beta to waitlist", timeframe="quarter", progress=0.0, project_slug="main-product"),
-            Goal(title="Reach 10K followers on TikTok", timeframe="quarter", progress=0.0, project_slug="content-engine"),
-            Goal(title="Full operator dashboard deployed", timeframe="quarter", progress=0.0, project_slug="operator-dashboard"),
-        ]
-        db.add_all(goals)
-
-        # Example seed suggestions — AI Generate will replace these with real ones
-        suggestions = [
-            AISuggestion(
-                body="Your waitlist is the highest-leverage asset right now — every piece of content should end with a soft CTA to join.",
-                category="growth",
-            ),
-            AISuggestion(
-                body="'Build in public' content consistently outperforms generic posts — document your progress with short videos showing real results.",
-                category="content",
-            ),
-            AISuggestion(
-                body="Identify your closest competitors and find what they lack — lean into differentiators like open-source, local-first, or privacy.",
-                category="product",
-            ),
-            AISuggestion(
-                body="Reddit communities in your niche are underutilized for lead generation — a demo post showing your product in action would perform well.",
-                category="market",
-            ),
-        ]
-        db.add_all(suggestions)
-
-        db.commit()
-    finally:
-        db.close()
+    """No seed data — dashboard starts empty. Users add their own projects via the API or UI.
+    AI Generate populates tasks, suggestions, drafts, and briefing on first run."""
+    pass
 
 
 app = FastAPI(
@@ -169,6 +72,7 @@ app.include_router(market_intel_router)
 app.include_router(leads_router)
 app.include_router(google_auth_router)
 app.include_router(social_sync_router)
+app.include_router(billing_router)
 
 
 # --- Background task wrappers (create their own DB sessions) ---
@@ -478,26 +382,94 @@ async def ai_generate_all(background_tasks: BackgroundTasks):
 import hashlib
 import secrets
 
-# Login credentials from env (defaults for development)
-AUTH_USER = os.getenv("DASHBOARD_USER", "123")
-AUTH_PASS = os.getenv("DASHBOARD_PASS", "123")
 AUTH_SECRET = os.getenv("AUTH_SECRET", secrets.token_hex(32))
 
 
+def _hash_password(password: str) -> str:
+    return hashlib.sha256(f"{AUTH_SECRET}:{password}".encode()).hexdigest()
+
+
+def _make_token(username: str) -> str:
+    return hashlib.sha256(f"{AUTH_SECRET}:token:{username}".encode()).hexdigest()
+
+
+@app.post("/auth/signup")
+def signup(body: dict, db: Session = Depends(get_db)):
+    username = body.get("username", "").strip()
+    password = body.get("password", "")
+    email = body.get("email", "").strip()
+    plan = body.get("plan", "local")
+
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Username and password required")
+    if len(password) < 3:
+        raise HTTPException(status_code=400, detail="Password must be at least 3 characters")
+    if plan in ("starter", "pro") and not email:
+        raise HTTPException(status_code=400, detail="Email required for cloud plans")
+
+    from db.database import User
+    existing = db.query(User).filter(User.username == username).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Username already taken")
+
+    user = User(
+        username=username,
+        email=email or None,
+        password_hash=_hash_password(password),
+        plan=plan if plan == "local" else "local",  # stays local until payment completes
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    token = _make_token(username)
+    result = {"token": token, "status": "ok", "username": username, "plan": plan}
+
+    # For cloud plans, create Stripe checkout
+    if plan in ("starter", "pro"):
+        try:
+            from services.infra.billing import create_customer, create_checkout_session
+            app_url = os.getenv("APP_URL", "http://localhost:3000")
+
+            customer_id = create_customer(email, username)
+            user.stripe_customer_id = customer_id
+            db.commit()
+
+            checkout_url = create_checkout_session(
+                customer_id=customer_id,
+                plan=plan,
+                success_url=f"{app_url}/dashboard?checkout=success",
+                cancel_url=f"{app_url}/pricing?checkout=canceled",
+            )
+            result["checkout_url"] = checkout_url
+        except Exception as e:
+            # Stripe not configured — just create local account
+            print(f"[Auth] Stripe checkout failed (may not be configured): {e}")
+
+    return result
+
+
 @app.post("/auth/login")
-def login(body: dict):
-    if body.get("username") == AUTH_USER and body.get("password") == AUTH_PASS:
-        # Generate a simple token (hash of secret + user)
-        token = hashlib.sha256(f"{AUTH_SECRET}:{AUTH_USER}".encode()).hexdigest()
-        return {"token": token, "status": "ok"}
-    raise HTTPException(status_code=401, detail="Invalid credentials")
+def login(body: dict, db: Session = Depends(get_db)):
+    username = body.get("username", "").strip()
+    password = body.get("password", "")
+
+    from db.database import User
+    user = db.query(User).filter(User.username == username).first()
+    if not user or user.password_hash != _hash_password(password):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    token = _make_token(username)
+    return {"token": token, "status": "ok", "username": username}
 
 
 @app.get("/auth/verify")
-def verify_token(token: str):
-    expected = hashlib.sha256(f"{AUTH_SECRET}:{AUTH_USER}".encode()).hexdigest()
-    if token == expected:
-        return {"status": "ok"}
+def verify_token(token: str, db: Session = Depends(get_db)):
+    from db.database import User
+    users = db.query(User).all()
+    for user in users:
+        if _make_token(user.username) == token:
+            return {"status": "ok", "username": user.username}
     raise HTTPException(status_code=401, detail="Invalid token")
 
 

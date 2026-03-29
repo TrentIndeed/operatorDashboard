@@ -287,9 +287,14 @@ Caddy automatically gets HTTPS certificates from Let's Encrypt.
    - Then **Fetch Drafts** → Execute step
    - Then **Format Briefing** → Execute step
    - Then **Send Email** → Execute step (check your inbox)
-10. **Activate**: Click **Publish** (top right) to make the schedule live
+10. **Publish the workflow**: Click **Publish** (top right button) — this is required for the schedule to actually run. If it just says "Publish", the workflow is NOT active yet.
+11. **Verify it's active**: After publishing, the button should change. Go to **Executions** tab (top center) the next day to confirm it ran.
+
+> **Important**: The workflow will NOT run on schedule unless you click Publish. Just saving is not enough.
 
 > **Note**: If you see "Invalid cron expression" when executing, delete the Schedule Trigger node, add a new one, and use the Interval/Days mode instead of Cron Expression mode.
+
+> **n8n URL**: `https://n8n.yourdomain.com` — bookmark this. You'll need it to check execution logs and update the workflow.
 
 ### 10. Update Google OAuth redirect URIs
 

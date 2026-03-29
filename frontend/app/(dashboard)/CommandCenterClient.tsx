@@ -16,8 +16,8 @@ import {
   Brain,
   Target,
   Clock,
-  TrendingUp,
   AlertTriangle,
+  Layers,
   Check,
   GitBranch,
   Radar,
@@ -123,7 +123,6 @@ export function CommandCenterClient() {
       updateStep("github", "running");
 
       // Poll and check which results have appeared
-      const startTaskCount = tasks.length;
       for (let attempt = 0; attempt < 20; attempt++) {
         await new Promise((r) => setTimeout(r, 3000));
 
@@ -280,7 +279,7 @@ export function CommandCenterClient() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-5">
         <StatCard
           label="Focus Time"
           value={tasks.length > 0 ? focusHours : "—"}
@@ -368,26 +367,42 @@ export function CommandCenterClient() {
           </section>
 
           {/* Goals */}
-          <section>
-            <SectionHeader title="Goals" />
-            <div className="elevated-card rounded-2xl p-6">
-              <GoalsPanel
-                week={data.goals_week}
-                month={data.goals_month}
-                quarter={data.goals_quarter}
-              />
-            </div>
-          </section>
+          {(data.goals_week.length > 0 || data.goals_month.length > 0 || data.goals_quarter.length > 0) && (
+            <section>
+              <SectionHeader title="Goals" />
+              <div className="elevated-card rounded-2xl p-6">
+                <GoalsPanel
+                  week={data.goals_week}
+                  month={data.goals_month}
+                  quarter={data.goals_quarter}
+                />
+              </div>
+            </section>
+          )}
 
           {/* Projects */}
-          <section>
-            <SectionHeader title="Projects" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              {data.projects.map((project) => (
-                <ProjectCard key={project.id} project={project} />
-              ))}
-            </div>
-          </section>
+          {data.projects.length > 0 ? (
+            <section>
+              <SectionHeader title="Projects" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {data.projects.map((project) => (
+                  <ProjectCard key={project.id} project={project} />
+                ))}
+              </div>
+            </section>
+          ) : (
+            <section>
+              <div className="elevated-card rounded-2xl p-8 text-center">
+                <Layers className="w-10 h-10 text-purple-400/30 mx-auto mb-3" />
+                <p className="text-body text-[var(--muted-foreground)]">
+                  No projects yet. Add your first project via the API:
+                </p>
+                <code className="text-caption text-purple-300 bg-purple-500/10 px-3 py-1.5 rounded-lg mt-3 inline-block">
+                  POST /projects/
+                </code>
+              </div>
+            </section>
+          )}
         </div>
 
         {/* RIGHT SIDEBAR */}

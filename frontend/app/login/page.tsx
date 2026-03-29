@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Zap, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
@@ -35,7 +36,7 @@ export default function LoginPage() {
       const data = await res.json();
       // Store token in cookie (30 day expiry)
       document.cookie = `operator_token=${data.token}; path=/; max-age=${30 * 24 * 60 * 60}; SameSite=Lax`;
-      router.push("/");
+      router.push("/dashboard");
     } catch {
       setError("Cannot reach backend");
       setLoading(false);
@@ -92,6 +93,13 @@ export default function LoginPage() {
             )}
           </button>
         </form>
+
+        <p className="text-center text-sm text-[var(--muted-foreground)] mt-6">
+          Don&apos;t have an account?{" "}
+          <Link href="/signup" className="text-purple-400 hover:text-purple-300 font-medium">
+            Create one
+          </Link>
+        </p>
       </div>
     </div>
   );
