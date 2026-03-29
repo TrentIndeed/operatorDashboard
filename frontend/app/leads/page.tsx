@@ -243,7 +243,7 @@ export default function Page() {
       : "0";
 
   return (
-    <div className="p-8 lg:p-10 space-y-8 max-w-[1440px]">
+    <div className="p-4 sm:p-6 lg:p-10 space-y-6 sm:space-y-8">
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>

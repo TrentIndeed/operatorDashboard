@@ -345,12 +345,12 @@ export default function Page() {
     );
   }
 
-  // Find the primary project for pipeline visualization (e.g., mesh2param or first project)
+  // Find the primary project for pipeline visualization (first project with a github repo)
   const pipelineProject =
-    projects.find((p) => p.slug === "mesh2param") || projects[0] || null;
+    projects.find((p) => p.github_repo) || projects[0] || null;
 
   return (
-    <div className="p-8 lg:p-10 space-y-8 max-w-[1440px]">
+    <div className="p-4 sm:p-6 lg:p-10 space-y-6 sm:space-y-8">
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>

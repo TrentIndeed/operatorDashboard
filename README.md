@@ -257,18 +257,39 @@ Caddy automatically gets HTTPS certificates from Let's Encrypt.
 ### 9. Set up n8n automation
 
 1. Open `https://n8n.yourdomain.com`
-2. Create an n8n account (local to your VPS)
-3. Import workflow: **Workflows → Import from File** → upload `n8n/daily-operator-briefing.json`
-4. Open the **Send Email** node → replace `CHANGE_ME_TO_YOUR_EMAIL` with your email
-5. Set up **Gmail OAuth2** credential in n8n:
-   - Go to Credentials → Add → Gmail OAuth2
-   - Use same Client ID / Client Secret from your `.env`
-   - First add redirect URI in Google Cloud Console: `https://n8n.yourdomain.com/rest/oauth2-credential/callback`
-   - Then click **Sign in with Google** in n8n
-6. Enable **Gmail API** in Google Cloud Console if not already done
-7. Select the Gmail credential in the Send Email node
-8. Set the **Schedule Trigger** to your preferred time (e.g. every day at 7am)
-9. Save and activate the workflow
+2. Create an n8n account (first-time setup — local to your VPS, not a cloud account)
+3. **Enable Gmail API** in Google Cloud Console:
+   - Go to https://console.cloud.google.com/apis/library
+   - Search "Gmail API" → click **Enable**
+4. **Add n8n OAuth redirect URI** in Google Cloud Console:
+   - Go to APIs & Credentials → your OAuth client → Authorized redirect URIs
+   - Add: `https://n8n.yourdomain.com/rest/oauth2-credential/callback`
+   - Save
+5. **Create Gmail credential in n8n**:
+   - In n8n: Credentials (key icon) → Add Credential → search "Gmail OAuth2"
+   - Paste your `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (same ones from `.env`)
+   - Click **Sign in with Google** → authorize access
+6. **Import the workflow**:
+   - Workflows → click **+** or Import → Import from File
+   - Upload `n8n/daily-operator-briefing.json` from your local machine
+7. **Configure the Send Email node**:
+   - Open the **Send Email** node (click on it → Open)
+   - Replace `CHANGE_ME_TO_YOUR_EMAIL` in the **To** field with your actual email
+   - In the **Credential** dropdown at the top, select your Gmail OAuth2 credential
+   - The **Message** field should already have `={{ $json.emailHtml }}` — if it's empty, click the expression toggle (fx icon) and paste that
+8. **Configure the Schedule Trigger**:
+   - Open the **Every Morning 7am** node
+   - Set to **Interval** → **Days** → time **07:00** (or whenever you want the email)
+   - Don't use raw cron expressions — n8n's validation is strict, use the dropdown
+9. **Test it**:
+   - Click each node one at a time: **Trigger AI Generate** → Execute step (wait for response)
+   - Then **Fetch Dashboard** → Execute step
+   - Then **Fetch Drafts** → Execute step
+   - Then **Format Briefing** → Execute step
+   - Then **Send Email** → Execute step (check your inbox)
+10. **Activate**: Click **Publish** (top right) to make the schedule live
+
+> **Note**: If you see "Invalid cron expression" when executing, delete the Schedule Trigger node, add a new one, and use the Interval/Days mode instead of Cron Expression mode.
 
 ### 10. Update Google OAuth redirect URIs
 

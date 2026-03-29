@@ -261,9 +261,9 @@ export function CommandCenterClient() {
   const firstBlocker = blockedProjects[0];
 
   return (
-    <div className="p-8 lg:p-10 space-y-8">
+    <div className="p-4 sm:p-6 lg:p-10 space-y-6 sm:space-y-8">
       {/* Page header */}
-      <div className="flex items-end justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
           <h1 className="text-heading text-white">
             Command Center
@@ -280,7 +280,7 @@ export function CommandCenterClient() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
         <StatCard
           label="Focus Time"
           value={tasks.length > 0 ? focusHours : "—"}
@@ -447,7 +447,7 @@ export function CommandCenterClient() {
                 </div>
 
                 {/* Steps */}
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-wrap">
                   {genSteps.map((step) => (
                     <div
                       key={step.id}

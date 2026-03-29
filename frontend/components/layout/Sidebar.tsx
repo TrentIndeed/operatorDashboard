@@ -14,6 +14,8 @@ import {
   Globe,
   GitBranch,
   Zap,
+  Menu,
+  X,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -29,29 +31,49 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname();
-
-  // Render only on the client to avoid hydration mismatch from browser extensions (Dark Reader)
   const [mounted, setMounted] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   useEffect(() => setMounted(true), []);
+
+  // Close mobile menu on navigation
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
   if (!mounted) {
-    return <aside className="fixed left-0 top-0 h-full w-60 bg-[var(--sidebar)] z-40" />;
+    return (
+      <>
+        <aside className="fixed left-0 top-0 h-full w-60 bg-[var(--sidebar)] z-40 hidden lg:block" />
+        <div className="h-14 lg:hidden" />
+      </>
+    );
   }
 
-  return (
-    <aside className="fixed left-0 top-0 h-full w-60 flex flex-col border-r border-white/[0.06] bg-[var(--sidebar)] z-40">
+  const sidebarContent = (
+    <>
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 h-16 border-b border-white/[0.06]">
-        <div className="flex items-center justify-center w-9 h-9 rounded-xl gradient-purple shadow-[0_0_16px_rgba(168,85,247,0.3)]">
-          <Zap className="w-[18px] h-[18px] text-white" />
+      <div className="flex items-center justify-between px-5 h-14 lg:h-16 border-b border-white/[0.06]">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center w-9 h-9 rounded-xl gradient-purple shadow-[0_0_16px_rgba(168,85,247,0.3)]">
+            <Zap className="w-[18px] h-[18px] text-white" />
+          </div>
+          <div>
+            <span className="text-[15px] font-bold tracking-tight text-white">
+              Operator
+            </span>
+            <span className="block text-[11px] text-[var(--muted-foreground)] font-medium">
+              Dashboard v1
+            </span>
+          </div>
         </div>
-        <div>
-          <span className="text-[15px] font-bold tracking-tight text-white">
-            Operator
-          </span>
-          <span className="block text-[11px] text-[var(--muted-foreground)] font-medium">
-            Dashboard v1
-          </span>
-        </div>
+        {/* Close button — mobile only */}
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="lg:hidden p-1.5 rounded-lg hover:bg-white/[0.06] text-[var(--muted-foreground)]"
+        >
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Nav */}
@@ -100,6 +122,45 @@ export function Sidebar() {
           </div>
         </div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile top bar */}
+      <div className="fixed top-0 left-0 right-0 h-14 bg-[var(--sidebar)] border-b border-white/[0.06] z-50 flex items-center px-4 lg:hidden">
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="p-2 rounded-lg hover:bg-white/[0.06] text-white"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+        <div className="flex items-center gap-2 ml-3">
+          <div className="w-7 h-7 rounded-lg gradient-purple flex items-center justify-center">
+            <Zap className="w-3.5 h-3.5 text-white" />
+          </div>
+          <span className="text-[14px] font-bold text-white">Operator</span>
+        </div>
+      </div>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 z-50 lg:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — desktop: always visible, mobile: slide in */}
+      <aside
+        className={cn(
+          "fixed left-0 top-0 h-full w-60 flex flex-col border-r border-white/[0.06] bg-[var(--sidebar)] z-50 transition-transform duration-200",
+          "lg:translate-x-0",
+          mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        )}
+      >
+        {sidebarContent}
+      </aside>
+    </>
   );
 }

@@ -6,13 +6,25 @@ import { Check, Clock, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, Task } from "@/lib/api";
 
-const TAG_GRADIENT: Record<string, string> = {
-  "mesh2param": "from-blue-500 to-cyan-400",
-  "ai-automation": "from-emerald-500 to-teal-400",
-  "content": "from-purple-500 to-pink-400",
-  "business": "from-amber-500 to-orange-400",
-  "dashboard": "from-orange-500 to-red-400",
-};
+// Color cycle for project tags — auto-assigns by tag name
+const TAG_GRADIENTS = [
+  "from-blue-500 to-cyan-400",
+  "from-emerald-500 to-teal-400",
+  "from-purple-500 to-pink-400",
+  "from-amber-500 to-orange-400",
+  "from-orange-500 to-red-400",
+  "from-pink-500 to-rose-400",
+  "from-cyan-500 to-blue-400",
+];
+
+const tagColorCache: Record<string, string> = {};
+function getTagGradient(tag: string): string {
+  if (!tagColorCache[tag]) {
+    const idx = Object.keys(tagColorCache).length % TAG_GRADIENTS.length;
+    tagColorCache[tag] = TAG_GRADIENTS[idx];
+  }
+  return tagColorCache[tag];
+}
 
 const PRIORITY_GLOW: (score: number) => string = (score) => {
   if (score >= 8) return "shadow-[inset_3px_0_0_#EF4444]";
@@ -83,7 +95,7 @@ export function TaskCard({ task, onComplete }: TaskCardProps) {
             <span
               className={cn(
                 "text-caption font-bold px-3 py-1 rounded-full text-white bg-gradient-to-r",
-                TAG_GRADIENT[task.project_tag] ?? "from-gray-500 to-gray-400"
+                getTagGradient(task.project_tag)
               )}
             >
               {task.project_tag}

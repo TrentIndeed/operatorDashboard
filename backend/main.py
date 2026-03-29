@@ -430,15 +430,23 @@ async def ai_generate_all(background_tasks: BackgroundTasks):
     background_tasks.add_task(_bg_generate_suggestions)
 
     # 3. Generate content drafts for top projects — spread across different days
+    # Use first two projects as context for drafts
+    from db.database import SessionLocal as _SL
+    _db = _SL()
+    _projects = _db.query(Project).limit(2).all()
+    _p1_tag = _projects[0].slug if _projects else "general"
+    _p2_tag = _projects[1].slug if len(_projects) > 1 else _p1_tag
+    _db.close()
+
     background_tasks.add_task(
         _bg_generate_draft_and_schedule,
         "Building in public: latest progress update",
-        "tiktok", "short-form", "ai-automation", 1,  # tomorrow
+        "tiktok", "short-form", _p1_tag, 1,  # tomorrow
     )
     background_tasks.add_task(
         _bg_generate_draft_and_schedule,
         "Technical deep dive on latest engineering challenge",
-        "youtube", "script", "mesh2param", 3,  # 3 days from now
+        "youtube", "script", _p2_tag, 3,  # 3 days from now
     )
 
     # 4. Generate today's briefing

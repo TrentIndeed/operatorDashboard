@@ -25,7 +25,7 @@ class Task(Base):
     title = Column(String, nullable=False)
     why = Column(Text)
     estimated_minutes = Column(Integer, default=30)
-    project_tag = Column(String)  # mesh2param | ai-automation | content | business | dashboard
+    project_tag = Column(String)  # matches project slug
     priority_score = Column(Float, default=0.0)
     status = Column(String, default="pending")  # pending | in_progress | done | deferred
     ai_generated = Column(Boolean, default=False)
@@ -115,7 +115,7 @@ class ContentDraft(Base):
     ai_generated = Column(Boolean, default=True)
     remix_of_id = Column(Integer)  # ID of original draft if this is a remix
     feedback = Column(Text)  # user feedback for remix
-    project_tag = Column(String)  # mesh2param | ai-automation | content
+    project_tag = Column(String)  # matches project slug
     hook_score = Column(Float)  # predicted virality 0-10
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

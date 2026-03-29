@@ -450,7 +450,7 @@ export default function ContentStudioPage() {
   }
 
   return (
-    <div className="p-8 lg:p-10 space-y-8 max-w-[1440px]">
+    <div className="p-4 sm:p-6 lg:p-10 space-y-6 sm:space-y-8">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>

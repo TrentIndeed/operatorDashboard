@@ -527,7 +527,7 @@ export default function MarketIntelligencePage() {
   const activeGaps = gaps.filter((g) => g.status === "active" || g.status === "new");
 
   return (
-    <div className="p-8 lg:p-10 space-y-8 max-w-[1440px]">
+    <div className="p-4 sm:p-6 lg:p-10 space-y-6 sm:space-y-8">
       {/* Page header */}
       <div className="flex items-end justify-between">
         <div>
