@@ -1,0 +1,172 @@
+{
+  "name": "Daily Operator Briefing",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Every Morning 7am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DASHBOARD_API_URL }}/ai/generate-all",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "generate-all",
+      "name": "Trigger AI Generate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "minutes"
+      },
+      "id": "wait-for-ai",
+      "name": "Wait 3 min for Claude",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/command-center/",
+        "options": {}
+      },
+      "id": "fetch-dashboard",
+      "name": "Fetch Command Center",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/content/drafts/?status=draft",
+        "options": {}
+      },
+      "id": "fetch-drafts",
+      "name": "Fetch Pending Drafts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 220]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/market/gaps?status=new",
+        "options": {}
+      },
+      "id": "fetch-gaps",
+      "name": "Fetch Market Gaps",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 440]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine all data into a daily briefing\nconst dashboard = $('Fetch Command Center').first().json;\nconst drafts = $('Fetch Pending Drafts').first().json || [];\nconst gaps = $('Fetch Market Gaps').first().json || [];\n\nconst tasks = (dashboard.tasks || []).sort((a, b) => b.priority_score - a.priority_score);\nconst top3 = tasks.slice(0, 3);\nconst suggestions = (dashboard.suggestions || []).slice(0, 3);\nconst briefing = (dashboard.briefing || []).slice(0, 3);\nconst goals = dashboard.goals_week || [];\n\n// Format top 3 tasks for WhatsApp\nconst whatsappMsg = `*Daily Focus — ${new Date().toLocaleDateString('en-US', {weekday: 'long', month: 'short', day: 'numeric'})}*\\n\\n` +\n  top3.map((t, i) => `${i+1}. *${t.title}*\\n   ${t.why || ''}\\n   _${t.estimated_minutes}min · ${t.project_tag}_`).join('\\n\\n') +\n  `\\n\\n---\\nReply: \"done 1\" to complete, \"add [task]\" to add`;\n\n// Format email HTML\nconst taskRows = tasks.map(t => \n  `<tr><td style=\"padding:8px;border-bottom:1px solid #222\">${t.title}</td><td style=\"padding:8px;text-align:center;border-bottom:1px solid #222\">${t.priority_score.toFixed(1)}</td><td style=\"padding:8px;text-align:center;border-bottom:1px solid #222\">${t.estimated_minutes}m</td></tr>`\n).join('');\n\nconst draftRows = (Array.isArray(drafts) ? drafts : []).slice(0, 5).map(d =>\n  `<li><strong>${d.title}</strong> (${d.platform}) — hook score: ${d.hook_score ? Math.round(d.hook_score * 100) + '%' : 'N/A'}</li>`\n).join('');\n\nconst gapRows = (Array.isArray(gaps) ? gaps : []).slice(0, 3).map(g =>\n  `<li><strong>${g.description.slice(0, 80)}...</strong><br><em>${g.suggested_action || ''}</em></li>`\n).join('');\n\nconst goalRows = goals.map(g =>\n  `<li>${g.title} — ${Math.round(g.progress * 100)}%</li>`\n).join('');\n\nconst emailHtml = `\n<div style=\"font-family:-apple-system,sans-serif;max-width:600px;margin:0 auto;background:#0A0A0B;color:#E4E4E7;padding:32px;border-radius:16px\">\n  <h1 style=\"color:#A855F7;font-size:24px;margin-bottom:4px\">Operator Dashboard</h1>\n  <p style=\"color:#6A6A80;margin-bottom:24px\">${new Date().toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'})}</p>\n  \n  <h2 style=\"color:#E4E4E7;font-size:16px;border-bottom:1px solid #222;padding-bottom:8px\">Priority Tasks (${tasks.length})</h2>\n  <table style=\"width:100%;border-collapse:collapse;margin-bottom:24px\">\n    <tr style=\"color:#6A6A80;font-size:12px\"><th style=\"text-align:left;padding:8px\">Task</th><th style=\"padding:8px\">Score</th><th style=\"padding:8px\">Time</th></tr>\n    ${taskRows}\n  </table>\n  \n  <h2 style=\"color:#E4E4E7;font-size:16px;border-bottom:1px solid #222;padding-bottom:8px\">Weekly Goals</h2>\n  <ul style=\"color:#9494AD;margin-bottom:24px\">${goalRows || '<li>No goals set</li>'}</ul>\n  \n  <h2 style=\"color:#E4E4E7;font-size:16px;border-bottom:1px solid #222;padding-bottom:8px\">Content Drafts to Review (${Array.isArray(drafts) ? drafts.length : 0})</h2>\n  <ul style=\"color:#9494AD;margin-bottom:24px\">${draftRows || '<li>No pending drafts</li>'}</ul>\n  \n  <h2 style=\"color:#E4E4E7;font-size:16px;border-bottom:1px solid #222;padding-bottom:8px\">Market Opportunities</h2>\n  <ul style=\"color:#9494AD;margin-bottom:24px\">${gapRows || '<li>No new gaps</li>'}</ul>\n  \n  <p style=\"color:#6A6A80;font-size:12px;margin-top:32px;text-align:center\">Generated by Operator Dashboard AI</p>\n</div>`;\n\nreturn [{\n  json: {\n    whatsappMessage: whatsappMsg,\n    emailHtml: emailHtml,\n    emailSubject: `Operator Briefing — ${new Date().toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}`,\n    top3Tasks: top3,\n    taskCount: tasks.length,\n    draftCount: Array.isArray(drafts) ? drafts.length : 0,\n    gapCount: Array.isArray(gaps) ? gaps.length : 0\n  }\n}];"
+      },
+      "id": "format-briefing",
+      "name": "Format Briefing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $env.EMAIL_TO }}",
+        "subject": "={{ $json.emailSubject }}",
+        "emailType": "html",
+        "html": "={{ $json.emailHtml }}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Email Briefing",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1100, -100],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-creds",
+          "name": "Gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "={{ $env.WHATSAPP_TO }}",
+        "textBody": "={{ $json.whatsappMessage }}"
+      },
+      "id": "send-whatsapp",
+      "name": "Send WhatsApp Focus",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [1100, 100],
+      "credentials": {
+        "whatsAppApi": {
+          "id": "whatsapp-creds",
+          "name": "WhatsApp Business"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Morning 7am": {
+      "main": [
+        [{ "node": "Trigger AI Generate", "type": "main", "index": 0 }]
+      ]
+    },
+    "Trigger AI Generate": {
+      "main": [
+        [{ "node": "Wait 3 min for Claude", "type": "main", "index": 0 }]
+      ]
+    },
+    "Wait 3 min for Claude": {
+      "main": [
+        [
+          { "node": "Fetch Command Center", "type": "main", "index": 0 },
+          { "node": "Fetch Pending Drafts", "type": "main", "index": 0 },
+          { "node": "Fetch Market Gaps", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Command Center": {
+      "main": [
+        [{ "node": "Format Briefing", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format Briefing": {
+      "main": [
+        [
+          { "node": "Send Email Briefing", "type": "main", "index": 0 },
+          { "node": "Send WhatsApp Focus", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    { "name": "operator-dashboard" },
+    { "name": "daily-automation" }
+  ]
+}
