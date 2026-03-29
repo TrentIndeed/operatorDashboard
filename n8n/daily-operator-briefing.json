@@ -12,161 +12,105 @@
           ]
         }
       },
-      "id": "cron-trigger",
+      "id": "1",
       "name": "Every Morning 7am",
       "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [0, 0]
+      "typeVersion": 1.1,
+      "position": [0, 300]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.DASHBOARD_API_URL }}/ai/generate-all",
-        "options": {
-          "timeout": 10000
-        }
+        "url": "http://backend:8000/ai/generate-all",
+        "options": {}
       },
-      "id": "generate-all",
+      "id": "2",
       "name": "Trigger AI Generate",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [220, 0]
+      "typeVersion": 4.1,
+      "position": [220, 300]
     },
     {
       "parameters": {
         "amount": 3,
         "unit": "minutes"
       },
-      "id": "wait-for-ai",
-      "name": "Wait 3 min for Claude",
+      "id": "3",
+      "name": "Wait 3 min",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [440, 0]
+      "position": [440, 300]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.DASHBOARD_API_URL }}/command-center/",
+        "url": "http://backend:8000/command-center/",
         "options": {}
       },
-      "id": "fetch-dashboard",
-      "name": "Fetch Command Center",
+      "id": "4",
+      "name": "Fetch Dashboard",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [660, 0]
+      "typeVersion": 4.1,
+      "position": [660, 200]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.DASHBOARD_API_URL }}/content/drafts/?status=draft",
+        "url": "http://backend:8000/content/drafts/?status=draft",
         "options": {}
       },
-      "id": "fetch-drafts",
-      "name": "Fetch Pending Drafts",
+      "id": "5",
+      "name": "Fetch Drafts",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [660, 220]
+      "typeVersion": 4.1,
+      "position": [660, 400]
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "={{ $env.DASHBOARD_API_URL }}/market/gaps?status=new",
-        "options": {}
+        "jsCode": "const dashboard = $('Fetch Dashboard').first().json;\n// n8n splits arrays into items — collect all items from Fetch Drafts\nconst draftItems = $('Fetch Drafts').all().map(i => i.json);\nconst allDrafts = draftItems.length > 0 && draftItems[0].title ? draftItems : [];\n\nconst tasks = (dashboard.tasks || []).sort((a, b) => b.priority_score - a.priority_score);\nconst top3 = tasks.slice(0, 3);\nconst goals = dashboard.goals_week || [];\nconst goalsMonth = dashboard.goals_month || [];\nconst suggestions = (dashboard.suggestions || []).slice(0, 3);\nconst briefing = (dashboard.briefing || []).slice(0, 3);\nconst projects = dashboard.projects || [];\n\n// Total focus time\nconst totalMin = tasks.reduce((s, t) => s + (t.estimated_minutes || 0), 0);\nconst focusTime = totalMin >= 60 ? (totalMin / 60).toFixed(1) + 'h' : totalMin + 'm';\n\n// Blockers\nconst blockers = projects.filter(p => p.blockers);\n\nconst s = (tag) => `style=\"${tag}\"`;\n\n// --- Today's Game Plan ---\nconst gamePlan = top3.map((t, i) =>\n  '<tr>' +\n  '<td style=\"padding:12px 8px;border-bottom:1px solid #1E1E2D;color:#A855F7;font-size:20px;font-weight:bold;vertical-align:top;width:30px\">' + (i+1) + '</td>' +\n  '<td style=\"padding:12px 8px;border-bottom:1px solid #1E1E2D\">' +\n    '<div style=\"color:#E4E4E7;font-weight:600;font-size:15px\">' + t.title + '</div>' +\n    '<div style=\"color:#9494AD;font-size:13px;margin-top:4px\">' + (t.why || '') + '</div>' +\n    '<div style=\"color:#6A6A80;font-size:12px;margin-top:6px\">' + (t.project_tag || '') + ' &middot; ' + (t.estimated_minutes || 30) + ' min</div>' +\n  '</td></tr>'\n).join('');\n\n// --- All Tasks ---\nconst taskRows = tasks.map(t =>\n  '<tr>' +\n  '<td style=\"padding:8px;border-bottom:1px solid #1E1E2D;color:#E4E4E7\">' + t.title + '</td>' +\n  '<td style=\"padding:8px;text-align:center;border-bottom:1px solid #1E1E2D;color:#A855F7;font-weight:bold\">' + t.priority_score.toFixed(1) + '</td>' +\n  '<td style=\"padding:8px;text-align:center;border-bottom:1px solid #1E1E2D;color:#9494AD\">' + (t.estimated_minutes || 30) + 'm</td>' +\n  '<td style=\"padding:8px;text-align:center;border-bottom:1px solid #1E1E2D;color:#6A6A80\">' + (t.project_tag || '') + '</td></tr>'\n).join('');\n\n// --- Content Drafts ---\nconst draftCards = allDrafts.slice(0, 5).map(d => {\n  const hookPreview = d.hook ? d.hook.slice(0, 100) + (d.hook.length > 100 ? '...' : '') : '';\n  const bodyPreview = d.body ? d.body.slice(0, 150) + (d.body.length > 150 ? '...' : '') : '';\n  const scoreText = d.hook_score ? Math.round(d.hook_score * 100) + '%' : 'N/A';\n  return '<div style=\"background:#111118;border-radius:12px;padding:16px;margin-bottom:12px;border-left:3px solid #A855F7\">' +\n    '<div style=\"display:flex;justify-content:space-between;align-items:center\">' +\n      '<span style=\"color:#E4E4E7;font-weight:600;font-size:14px\">' + d.title + '</span>' +\n      '<span style=\"color:#A855F7;font-size:11px;background:#A855F720;padding:2px 8px;border-radius:12px\">' + d.platform + '</span>' +\n    '</div>' +\n    (hookPreview ? '<div style=\"color:#C084FC;font-style:italic;font-size:13px;margin-top:8px\">&ldquo;' + hookPreview + '&rdquo;</div>' : '') +\n    (bodyPreview ? '<div style=\"color:#9494AD;font-size:12px;margin-top:6px\">' + bodyPreview + '</div>' : '') +\n    '<div style=\"color:#6A6A80;font-size:11px;margin-top:8px\">Hook score: ' + scoreText + ' &middot; ' + (d.content_type || 'draft') + '</div>' +\n  '</div>';\n}).join('');\n\n// --- Goals ---\nconst goalRows = goals.map(g =>\n  '<div style=\"display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1E1E2D\">' +\n    '<span style=\"color:#E4E4E7;font-size:13px\">' + g.title + '</span>' +\n    '<span style=\"color:' + (g.progress >= 0.5 ? '#10B981' : g.progress > 0 ? '#F59E0B' : '#6A6A80') + ';font-weight:bold;font-size:13px\">' + Math.round(g.progress * 100) + '%</span>' +\n  '</div>'\n).join('');\n\nconst monthGoalRows = goalsMonth.map(g =>\n  '<div style=\"display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1E1E2D\">' +\n    '<span style=\"color:#E4E4E7;font-size:13px\">' + g.title + '</span>' +\n    '<span style=\"color:' + (g.progress >= 0.5 ? '#10B981' : g.progress > 0 ? '#F59E0B' : '#6A6A80') + ';font-weight:bold;font-size:13px\">' + Math.round(g.progress * 100) + '%</span>' +\n  '</div>'\n).join('');\n\n// --- Blockers ---\nconst blockerRows = blockers.map(p =>\n  '<div style=\"background:#F59E0B15;border-left:3px solid #F59E0B;padding:10px 12px;border-radius:8px;margin-bottom:8px\">' +\n    '<span style=\"color:#F59E0B;font-weight:600;font-size:13px\">' + p.name + ':</span> ' +\n    '<span style=\"color:#9494AD;font-size:13px\">' + p.blockers + '</span>' +\n  '</div>'\n).join('');\n\n// --- AI Suggestions ---\nconst suggestionRows = suggestions.map(s =>\n  '<div style=\"background:#A855F710;border-left:3px solid #A855F7;padding:10px 12px;border-radius:8px;margin-bottom:8px\">' +\n    '<span style=\"color:#E4E4E7;font-size:13px\">' + s.body + '</span>' +\n  '</div>'\n).join('');\n\n// --- News ---\nconst newsRows = briefing.map(b =>\n  '<div style=\"padding:8px 0;border-bottom:1px solid #1E1E2D\">' +\n    '<div style=\"color:#E4E4E7;font-size:13px;font-weight:600\">' + b.headline + '</div>' +\n    (b.summary ? '<div style=\"color:#9494AD;font-size:12px;margin-top:2px\">' + b.summary + '</div>' : '') +\n  '</div>'\n).join('');\n\n// --- Build Email ---\nconst emailHtml = '<div style=\"font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:640px;margin:0 auto;background:#0A0A0B;color:#E4E4E7;padding:32px;border-radius:16px\">' +\n\n  // Header\n  '<div style=\"text-align:center;margin-bottom:32px\">' +\n    '<h1 style=\"color:#A855F7;font-size:28px;margin:0\">Operator Briefing</h1>' +\n    '<p style=\"color:#6A6A80;font-size:14px;margin:8px 0 0\">' + new Date().toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'}) + '</p>' +\n    '<p style=\"color:#9494AD;font-size:13px;margin:4px 0 0\">' + tasks.length + ' tasks &middot; ' + focusTime + ' focus time &middot; ' + allDrafts.length + ' drafts pending</p>' +\n  '</div>' +\n\n  // Today's Game Plan\n  '<div style=\"background:#111118;border-radius:12px;padding:20px;margin-bottom:24px\">' +\n    '<h2 style=\"color:#E4E4E7;font-size:18px;margin:0 0 16px;border-bottom:1px solid #222;padding-bottom:8px\">Today\\'s Game Plan</h2>' +\n    (top3.length > 0 ? '<table style=\"width:100%;border-collapse:collapse\">' + gamePlan + '</table>' : '<p style=\"color:#6A6A80\">Hit AI Generate to get your priorities.</p>') +\n  '</div>' +\n\n  // Blockers\n  (blockers.length > 0 ? '<div style=\"margin-bottom:24px\"><h2 style=\"color:#F59E0B;font-size:16px;margin:0 0 12px\">Blockers (' + blockers.length + ')</h2>' + blockerRows + '</div>' : '') +\n\n  // All Tasks\n  '<h2 style=\"color:#E4E4E7;font-size:16px;border-bottom:1px solid #222;padding-bottom:8px;margin-bottom:12px\">All Priority Tasks (' + tasks.length + ')</h2>' +\n  '<table style=\"width:100%;border-collapse:collapse;margin-bottom:24px\">' +\n    '<tr style=\"color:#6A6A80;font-size:11px;text-transform:uppercase\"><th style=\"text-align:left;padding:8px\">Task</th><th style=\"padding:8px;width:50px\">Score</th><th style=\"padding:8px;width:50px\">Time</th><th style=\"padding:8px;width:80px\">Project</th></tr>' +\n    taskRows +\n  '</table>' +\n\n  // Content Drafts\n  '<h2 style=\"color:#E4E4E7;font-size:16px;border-bottom:1px solid #222;padding-bottom:8px;margin-bottom:12px\">Content Drafts to Review (' + allDrafts.length + ')</h2>' +\n  (draftCards || '<p style=\"color:#6A6A80\">No pending drafts.</p>') +\n  '<div style=\"margin-bottom:24px\"></div>' +\n\n  // Goals\n  '<div style=\"display:flex;gap:24px;margin-bottom:24px\">' +\n    '<div style=\"flex:1\">' +\n      '<h2 style=\"color:#E4E4E7;font-size:16px;border-bottom:1px solid #222;padding-bottom:8px;margin-bottom:8px\">This Week</h2>' +\n      (goalRows || '<p style=\"color:#6A6A80;font-size:13px\">No weekly goals.</p>') +\n    '</div>' +\n    '<div style=\"flex:1\">' +\n      '<h2 style=\"color:#E4E4E7;font-size:16px;border-bottom:1px solid #222;padding-bottom:8px;margin-bottom:8px\">This Month</h2>' +\n      (monthGoalRows || '<p style=\"color:#6A6A80;font-size:13px\">No monthly goals.</p>') +\n    '</div>' +\n  '</div>' +\n\n  // AI Suggestions\n  (suggestions.length > 0 ? '<h2 style=\"color:#E4E4E7;font-size:16px;border-bottom:1px solid #222;padding-bottom:8px;margin-bottom:12px\">AI Suggestions</h2>' + suggestionRows + '<div style=\"margin-bottom:24px\"></div>' : '') +\n\n  // Industry News\n  (briefing.length > 0 ? '<h2 style=\"color:#E4E4E7;font-size:16px;border-bottom:1px solid #222;padding-bottom:8px;margin-bottom:12px\">Industry News</h2>' + newsRows + '<div style=\"margin-bottom:24px\"></div>' : '') +\n\n  // Footer\n  '<div style=\"text-align:center;padding-top:16px;border-top:1px solid #1E1E2D\">' +\n    '<p style=\"color:#6A6A80;font-size:11px\">Generated by Operator Dashboard AI</p>' +\n  '</div>' +\n\n'</div>';\n\nreturn [{ json: { emailHtml, emailSubject: 'Operator Briefing — ' + new Date().toLocaleDateString('en-US', {month: 'short', day: 'numeric'}), taskCount: tasks.length } }];"
       },
-      "id": "fetch-gaps",
-      "name": "Fetch Market Gaps",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [660, 440]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Combine all data into a daily briefing\nconst dashboard = $('Fetch Command Center').first().json;\nconst drafts = $('Fetch Pending Drafts').first().json || [];\nconst gaps = $('Fetch Market Gaps').first().json || [];\n\nconst tasks = (dashboard.tasks || []).sort((a, b) => b.priority_score - a.priority_score);\nconst top3 = tasks.slice(0, 3);\nconst suggestions = (dashboard.suggestions || []).slice(0, 3);\nconst briefing = (dashboard.briefing || []).slice(0, 3);\nconst goals = dashboard.goals_week || [];\n\n// Format top 3 tasks for WhatsApp\nconst whatsappMsg = `*Daily Focus — ${new Date().toLocaleDateString('en-US', {weekday: 'long', month: 'short', day: 'numeric'})}*\\n\\n` +\n  top3.map((t, i) => `${i+1}. *${t.title}*\\n   ${t.why || ''}\\n   _${t.estimated_minutes}min · ${t.project_tag}_`).join('\\n\\n') +\n  `\\n\\n---\\nReply: \"done 1\" to complete, \"add [task]\" to add`;\n\n// Format email HTML\nconst taskRows = tasks.map(t => \n  `<tr><td style=\"padding:8px;border-bottom:1px solid #222\">${t.title}</td><td style=\"padding:8px;text-align:center;border-bottom:1px solid #222\">${t.priority_score.toFixed(1)}</td><td style=\"padding:8px;text-align:center;border-bottom:1px solid #222\">${t.estimated_minutes}m</td></tr>`\n).join('');\n\nconst draftRows = (Array.isArray(drafts) ? drafts : []).slice(0, 5).map(d =>\n  `<li><strong>${d.title}</strong> (${d.platform}) — hook score: ${d.hook_score ? Math.round(d.hook_score * 100) + '%' : 'N/A'}</li>`\n).join('');\n\nconst gapRows = (Array.isArray(gaps) ? gaps : []).slice(0, 3).map(g =>\n  `<li><strong>${g.description.slice(0, 80)}...</strong><br><em>${g.suggested_action || ''}</em></li>`\n).join('');\n\nconst goalRows = goals.map(g =>\n  `<li>${g.title} — ${Math.round(g.progress * 100)}%</li>`\n).join('');\n\nconst emailHtml = `\n<div style=\"font-family:-apple-system,sans-serif;max-width:600px;margin:0 auto;background:#0A0A0B;color:#E4E4E7;padding:32px;border-radius:16px\">\n  <h1 style=\"color:#A855F7;font-size:24px;margin-bottom:4px\">Operator Dashboard</h1>\n  <p style=\"color:#6A6A80;margin-bottom:24px\">${new Date().toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'})}</p>\n  \n  <h2 style=\"color:#E4E4E7;font-size:16px;border-bottom:1px solid #222;padding-bottom:8px\">Priority Tasks (${tasks.length})</h2>\n  <table style=\"width:100%;border-collapse:collapse;margin-bottom:24px\">\n    <tr style=\"color:#6A6A80;font-size:12px\"><th style=\"text-align:left;padding:8px\">Task</th><th style=\"padding:8px\">Score</th><th style=\"padding:8px\">Time</th></tr>\n    ${taskRows}\n  </table>\n  \n  <h2 style=\"color:#E4E4E7;font-size:16px;border-bottom:1px solid #222;padding-bottom:8px\">Weekly Goals</h2>\n  <ul style=\"color:#9494AD;margin-bottom:24px\">${goalRows || '<li>No goals set</li>'}</ul>\n  \n  <h2 style=\"color:#E4E4E7;font-size:16px;border-bottom:1px solid #222;padding-bottom:8px\">Content Drafts to Review (${Array.isArray(drafts) ? drafts.length : 0})</h2>\n  <ul style=\"color:#9494AD;margin-bottom:24px\">${draftRows || '<li>No pending drafts</li>'}</ul>\n  \n  <h2 style=\"color:#E4E4E7;font-size:16px;border-bottom:1px solid #222;padding-bottom:8px\">Market Opportunities</h2>\n  <ul style=\"color:#9494AD;margin-bottom:24px\">${gapRows || '<li>No new gaps</li>'}</ul>\n  \n  <p style=\"color:#6A6A80;font-size:12px;margin-top:32px;text-align:center\">Generated by Operator Dashboard AI</p>\n</div>`;\n\nreturn [{\n  json: {\n    whatsappMessage: whatsappMsg,\n    emailHtml: emailHtml,\n    emailSubject: `Operator Briefing — ${new Date().toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}`,\n    top3Tasks: top3,\n    taskCount: tasks.length,\n    draftCount: Array.isArray(drafts) ? drafts.length : 0,\n    gapCount: Array.isArray(gaps) ? gaps.length : 0\n  }\n}];"
-      },
-      "id": "format-briefing",
+      "id": "6",
       "name": "Format Briefing",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [880, 0]
+      "position": [880, 300]
     },
     {
       "parameters": {
-        "sendTo": "={{ $env.EMAIL_TO }}",
+        "sendTo": "={{ CHANGE_ME_TO_YOUR_EMAIL }}",
         "subject": "={{ $json.emailSubject }}",
         "emailType": "html",
-        "html": "={{ $json.emailHtml }}",
+        "message": "={{ $json.emailHtml }}",
         "options": {}
       },
-      "id": "send-email",
-      "name": "Send Email Briefing",
+      "id": "7",
+      "name": "Send Email",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [1100, -100],
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "gmail-creds",
-          "name": "Gmail"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
-        "recipientPhoneNumber": "={{ $env.WHATSAPP_TO }}",
-        "textBody": "={{ $json.whatsappMessage }}"
-      },
-      "id": "send-whatsapp",
-      "name": "Send WhatsApp Focus",
-      "type": "n8n-nodes-base.whatsApp",
-      "typeVersion": 1,
-      "position": [1100, 100],
-      "credentials": {
-        "whatsAppApi": {
-          "id": "whatsapp-creds",
-          "name": "WhatsApp Business"
-        }
-      }
+      "position": [1100, 300]
     }
   ],
   "connections": {
     "Every Morning 7am": {
-      "main": [
-        [{ "node": "Trigger AI Generate", "type": "main", "index": 0 }]
-      ]
+      "main": [[{"node": "Trigger AI Generate", "type": "main", "index": 0}]]
     },
     "Trigger AI Generate": {
-      "main": [
-        [{ "node": "Wait 3 min for Claude", "type": "main", "index": 0 }]
-      ]
+      "main": [[{"node": "Wait 3 min", "type": "main", "index": 0}]]
     },
-    "Wait 3 min for Claude": {
-      "main": [
-        [
-          { "node": "Fetch Command Center", "type": "main", "index": 0 },
-          { "node": "Fetch Pending Drafts", "type": "main", "index": 0 },
-          { "node": "Fetch Market Gaps", "type": "main", "index": 0 }
-        ]
-      ]
+    "Wait 3 min": {
+      "main": [[{"node": "Fetch Dashboard", "type": "main", "index": 0}]]
     },
-    "Fetch Command Center": {
-      "main": [
-        [{ "node": "Format Briefing", "type": "main", "index": 0 }]
-      ]
+    "Fetch Dashboard": {
+      "main": [[{"node": "Fetch Drafts", "type": "main", "index": 0}]]
+    },
+    "Fetch Drafts": {
+      "main": [[{"node": "Format Briefing", "type": "main", "index": 0}]]
     },
     "Format Briefing": {
-      "main": [
-        [
-          { "node": "Send Email Briefing", "type": "main", "index": 0 },
-          { "node": "Send WhatsApp Focus", "type": "main", "index": 0 }
-        ]
-      ]
+      "main": [[{"node": "Send Email", "type": "main", "index": 0}]]
     }
   },
   "settings": {
     "executionOrder": "v1"
-  },
-  "tags": [
-    { "name": "operator-dashboard" },
-    { "name": "daily-automation" }
-  ]
+  }
 }

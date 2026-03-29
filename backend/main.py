@@ -465,6 +465,34 @@ async def ai_generate_all(background_tasks: BackgroundTasks):
     }
 
 
+# --- Auth ---
+
+import hashlib
+import secrets
+
+# Login credentials from env (defaults for development)
+AUTH_USER = os.getenv("DASHBOARD_USER", "123")
+AUTH_PASS = os.getenv("DASHBOARD_PASS", "123")
+AUTH_SECRET = os.getenv("AUTH_SECRET", secrets.token_hex(32))
+
+
+@app.post("/auth/login")
+def login(body: dict):
+    if body.get("username") == AUTH_USER and body.get("password") == AUTH_PASS:
+        # Generate a simple token (hash of secret + user)
+        token = hashlib.sha256(f"{AUTH_SECRET}:{AUTH_USER}".encode()).hexdigest()
+        return {"token": token, "status": "ok"}
+    raise HTTPException(status_code=401, detail="Invalid credentials")
+
+
+@app.get("/auth/verify")
+def verify_token(token: str):
+    expected = hashlib.sha256(f"{AUTH_SECRET}:{AUTH_USER}".encode()).hexdigest()
+    if token == expected:
+        return {"status": "ok"}
+    raise HTTPException(status_code=401, detail="Invalid token")
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "version": "0.1.0"}

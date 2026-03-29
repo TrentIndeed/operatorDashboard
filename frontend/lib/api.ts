@@ -1,23 +1,10 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const API_USER = process.env.NEXT_PUBLIC_API_USER || "";
-const API_PASS = process.env.NEXT_PUBLIC_API_PASS || "";
-
-function authHeaders(): Record<string, string> {
-  if (API_USER && API_PASS) {
-    const encoded = typeof btoa !== "undefined"
-      ? btoa(`${API_USER}:${API_PASS}`)
-      : Buffer.from(`${API_USER}:${API_PASS}`).toString("base64");
-    return { Authorization: `Basic ${encoded}` };
-  }
-  return {};
-}
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      ...authHeaders(),
       ...options?.headers,
     },
   });

@@ -7,226 +7,57 @@
         "path": "whatsapp-webhook",
         "options": {}
       },
-      "id": "webhook",
+      "id": "1",
       "name": "WhatsApp Webhook",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [0, 0],
-      "webhookId": "whatsapp-reply"
+      "typeVersion": 1.1,
+      "position": [0, 300]
     },
     {
       "parameters": {
-        "jsCode": "// Parse incoming WhatsApp message\nconst body = $input.first().json.body || $input.first().json;\nconst entry = body.entry?.[0];\nconst changes = entry?.changes?.[0];\nconst message = changes?.value?.messages?.[0];\n\nif (!message || message.type !== 'text') {\n  return [{ json: { action: 'ignore', reason: 'Not a text message' } }];\n}\n\nconst text = message.text.body.trim().toLowerCase();\nconst from = message.from;\n\n// Parse commands\nlet action = 'unknown';\nlet taskId = null;\nlet taskTitle = null;\n\nif (text.match(/^done\\s*(\\d+)/)) {\n  action = 'complete_task';\n  const num = parseInt(text.match(/^done\\s*(\\d+)/)[1]);\n  taskId = num; // This is the position (1,2,3), will resolve to actual ID\n} else if (text.match(/^add\\s+(.+)/)) {\n  action = 'add_task';\n  taskTitle = text.match(/^add\\s+(.+)/)[1];\n} else if (text === 'status') {\n  action = 'status';\n} else if (text === 'tasks') {\n  action = 'list_tasks';\n} else if (text.match(/^focus\\s+(.+)/)) {\n  action = 'add_task';\n  taskTitle = text.match(/^focus\\s+(.+)/)[1];\n}\n\nreturn [{ json: { action, taskId, taskTitle, from, rawText: text } }];"
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];\n\nif (!message || message.type !== 'text') {\n  return [{ json: { action: 'ignore' } }];\n}\n\nconst text = message.text.body.trim().toLowerCase();\nconst from = message.from;\n\nlet action = 'unknown';\nlet taskNum = null;\nlet taskTitle = null;\n\nconst doneMatch = text.match(/^done\\s*(\\d+)/);\nconst addMatch = text.match(/^(?:add|focus)\\s+(.+)/);\n\nif (doneMatch) {\n  action = 'complete';\n  taskNum = parseInt(doneMatch[1]);\n} else if (addMatch) {\n  action = 'add';\n  taskTitle = addMatch[1];\n} else if (text === 'tasks' || text === 'status') {\n  action = 'list';\n}\n\nreturn [{ json: { action, taskNum, taskTitle, from } }];"
       },
-      "id": "parse-message",
+      "id": "2",
       "name": "Parse Command",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [220, 0]
+      "position": [220, 300]
     },
     {
       "parameters": {
-        "rules": {
-          "rules": [
-            {
-              "outputIndex": 0,
-              "conditions": {
-                "options": { "caseSensitive": false },
-                "conditions": [
-                  { "leftValue": "={{ $json.action }}", "rightValue": "complete_task", "operator": { "type": "string", "operation": "equals" } }
-                ]
-              }
-            },
-            {
-              "outputIndex": 1,
-              "conditions": {
-                "options": { "caseSensitive": false },
-                "conditions": [
-                  { "leftValue": "={{ $json.action }}", "rightValue": "add_task", "operator": { "type": "string", "operation": "equals" } }
-                ]
-              }
-            },
-            {
-              "outputIndex": 2,
-              "conditions": {
-                "options": { "caseSensitive": false },
-                "conditions": [
-                  { "leftValue": "={{ $json.action }}", "rightValue": "list_tasks", "operator": { "type": "string", "operation": "equals" } }
-                ]
-              }
-            }
-          ]
-        }
+        "jsCode": "const data = $('Parse Command').first().json;\nconst action = data.action;\n\nconst API = 'http://backend:8000';\n\nif (action === 'complete') {\n  // Fetch tasks, find the Nth one, mark done\n  const resp = await fetch(API + '/tasks/?status=pending');\n  const tasks = await resp.json();\n  const sorted = tasks.sort((a, b) => b.priority_score - a.priority_score);\n  const task = sorted[data.taskNum - 1];\n  if (!task) return [{ json: { reply: 'No task #' + data.taskNum + '. You have ' + sorted.length + ' tasks.' } }];\n  await fetch(API + '/tasks/' + task.id, { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({status: 'done'}) });\n  return [{ json: { reply: '✅ Done: ' + task.title } }];\n}\n\nif (action === 'add') {\n  await fetch(API + '/tasks/', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({title: data.taskTitle, priority_score: 7.0, status: 'pending', estimated_minutes: 30}) });\n  return [{ json: { reply: '➕ Added: ' + data.taskTitle } }];\n}\n\nif (action === 'list') {\n  const resp = await fetch(API + '/tasks/?status=pending');\n  const tasks = await resp.json();\n  const sorted = tasks.sort((a, b) => b.priority_score - a.priority_score);\n  const list = sorted.map((t, i) => (i+1) + '. ' + t.title + ' (' + t.priority_score.toFixed(1) + ')').join('\\n');\n  return [{ json: { reply: '*Your Tasks:*\\n\\n' + (list || 'No pending tasks.') } }];\n}\n\nreturn [{ json: { reply: 'Commands: done 1, add [task], tasks' } }];"
       },
-      "id": "router",
-      "name": "Route Action",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3.2,
-      "position": [440, 0],
-      "outputs": ["Complete Task", "Add Task", "List Tasks"]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "={{ $env.DASHBOARD_API_URL }}/tasks/?status=pending",
-        "options": {}
-      },
-      "id": "fetch-tasks-for-complete",
-      "name": "Fetch Tasks",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [660, -200]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Find the Nth task and mark it done\nconst tasks = $('Fetch Tasks').first().json;\nconst parseData = $('Parse Command').first().json;\nconst position = parseData.taskId;\n\nconst sorted = (Array.isArray(tasks) ? tasks : []).sort((a, b) => b.priority_score - a.priority_score);\nconst task = sorted[position - 1];\n\nif (!task) {\n  return [{ json: { error: true, reply: `No task at position ${position}. You have ${sorted.length} tasks.` } }];\n}\n\nreturn [{ json: { taskId: task.id, taskTitle: task.title, reply: `Done: ${task.title}` } }];"
-      },
-      "id": "resolve-task",
-      "name": "Resolve Task #",
+      "id": "3",
+      "name": "Handle Action",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [880, -200]
-    },
-    {
-      "parameters": {
-        "method": "PATCH",
-        "url": "={{ $env.DASHBOARD_API_URL }}/tasks/{{ $json.taskId }}",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "{ \"status\": \"done\" }",
-        "options": {}
-      },
-      "id": "complete-task",
-      "name": "Mark Task Done",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1100, -200]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $env.DASHBOARD_API_URL }}/tasks/",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ title: $('Parse Command').first().json.taskTitle, priority_score: 7.0, status: 'pending', estimated_minutes: 30 }) }}",
-        "options": {}
-      },
-      "id": "add-task",
-      "name": "Create Task",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [660, 0]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "={{ $env.DASHBOARD_API_URL }}/tasks/?status=pending",
-        "options": {}
-      },
-      "id": "fetch-tasks-for-list",
-      "name": "Fetch All Tasks",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [660, 200]
-    },
-    {
-      "parameters": {
-        "jsCode": "const tasks = $input.first().json;\nconst sorted = (Array.isArray(tasks) ? tasks : []).sort((a, b) => b.priority_score - a.priority_score);\nconst list = sorted.map((t, i) => `${i+1}. ${t.title} (${t.priority_score.toFixed(1)})`).join('\\n');\nreturn [{ json: { reply: `*Your Tasks:*\\n\\n${list || 'No pending tasks.'}` } }];"
-      },
-      "id": "format-task-list",
-      "name": "Format Task List",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [880, 200]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Build reply from whichever branch ran\nconst reply = $input.first().json.reply || $input.first().json.title || 'Done';\nconst from = $('Parse Command').first().json.from;\nreturn [{ json: { reply: reply, to: from } }];"
-      },
-      "id": "build-reply",
-      "name": "Build Reply",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1320, 0]
+      "position": [440, 300]
     },
     {
       "parameters": {
         "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
-        "recipientPhoneNumber": "={{ $json.to }}",
+        "recipientPhoneNumber": "={{ $('Parse Command').first().json.from }}",
         "textBody": "={{ $json.reply }}"
       },
-      "id": "reply-whatsapp",
-      "name": "Reply on WhatsApp",
+      "id": "4",
+      "name": "Reply WhatsApp",
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1,
-      "position": [1540, 0],
-      "credentials": {
-        "whatsAppApi": {
-          "id": "whatsapp-creds",
-          "name": "WhatsApp Business"
-        }
-      }
+      "position": [660, 300]
     }
   ],
   "connections": {
     "WhatsApp Webhook": {
-      "main": [
-        [{ "node": "Parse Command", "type": "main", "index": 0 }]
-      ]
+      "main": [[{"node": "Parse Command", "type": "main", "index": 0}]]
     },
     "Parse Command": {
-      "main": [
-        [{ "node": "Route Action", "type": "main", "index": 0 }]
-      ]
+      "main": [[{"node": "Handle Action", "type": "main", "index": 0}]]
     },
-    "Route Action": {
-      "main": [
-        [{ "node": "Fetch Tasks", "type": "main", "index": 0 }],
-        [{ "node": "Create Task", "type": "main", "index": 0 }],
-        [{ "node": "Fetch All Tasks", "type": "main", "index": 0 }]
-      ]
-    },
-    "Fetch Tasks": {
-      "main": [
-        [{ "node": "Resolve Task #", "type": "main", "index": 0 }]
-      ]
-    },
-    "Resolve Task #": {
-      "main": [
-        [{ "node": "Mark Task Done", "type": "main", "index": 0 }]
-      ]
-    },
-    "Mark Task Done": {
-      "main": [
-        [{ "node": "Build Reply", "type": "main", "index": 0 }]
-      ]
-    },
-    "Create Task": {
-      "main": [
-        [{ "node": "Build Reply", "type": "main", "index": 0 }]
-      ]
-    },
-    "Fetch All Tasks": {
-      "main": [
-        [{ "node": "Format Task List", "type": "main", "index": 0 }]
-      ]
-    },
-    "Format Task List": {
-      "main": [
-        [{ "node": "Build Reply", "type": "main", "index": 0 }]
-      ]
-    },
-    "Build Reply": {
-      "main": [
-        [{ "node": "Reply on WhatsApp", "type": "main", "index": 0 }]
-      ]
+    "Handle Action": {
+      "main": [[{"node": "Reply WhatsApp", "type": "main", "index": 0}]]
     }
   },
   "settings": {
     "executionOrder": "v1"
-  },
-  "tags": [
-    { "name": "operator-dashboard" },
-    { "name": "whatsapp-bot" }
-  ]
+  }
 }
