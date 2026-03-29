@@ -41,9 +41,10 @@ services:
       - N8N_SECURE_COOKIE=false
       - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678}
       - DASHBOARD_API_URL=http://backend:8000
-      - EMAIL_TO=${EMAIL_TO}
-      - WHATSAPP_PHONE_ID=${WHATSAPP_PHONE_ID}
-      - WHATSAPP_TO=${WHATSAPP_TO}
+      - EMAIL_TO
+      - WHATSAPP_PHONE_ID
+      - WHATSAPP_TO
+      - WHATSAPP_ACCESS_TOKEN
     volumes:
       - n8n_data:/home/node/.n8n
     depends_on:
