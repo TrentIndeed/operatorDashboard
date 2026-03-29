@@ -41,53 +41,37 @@ cp .env.example .env
 
 Edit `.env` and fill in your credentials. See [Credentials Setup](#credentials-setup) below.
 
-### 3. Install backend
+### 3. Install backend + frontend
 
 ```bash
-cd backend
-python -m venv .venv
-
-# Windows (Git Bash / PowerShell)
-source .venv/Scripts/activate
-# macOS/Linux
-# source .venv/bin/activate
-
-pip install -r requirements.txt
+bash scripts/setup.sh
 ```
 
-### 4. Install frontend
+This installs Python venv + dependencies, npm packages, creates `frontend/.env.local`, and checks for Claude CLI.
 
-```bash
-cd frontend
-npm install
-```
-
-### 5. Create frontend local config
-
-Create `frontend/.env.local` (gitignored — this is your personal config):
+Edit `frontend/.env.local` with your display name:
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
 NEXT_PUBLIC_DISPLAY_NAME=@yourhandle
-NEXT_PUBLIC_TAGLINE=solo founder mode
 NEXT_PUBLIC_INITIALS=YH
 ```
 
-### 6. Run
+### 4. Run
 
-Open **two terminals**:
-
-**Terminal 1 — Backend:**
 ```bash
-cd backend
-source .venv/Scripts/activate   # or bin/activate on mac/linux
-uvicorn main:app --reload --port 8000
+bash scripts/start.sh
 ```
 
-**Terminal 2 — Frontend:**
+Starts both backend (port 8000) and frontend (port 3000) in one terminal. Press `Ctrl+C` to stop both.
+
+Or run manually in two terminals:
+
 ```bash
-cd frontend
-npm run dev
+# Terminal 1
+cd backend && source .venv/Scripts/activate && uvicorn main:app --reload --port 8000
+
+# Terminal 2
+cd frontend && npm run dev
 ```
 
 Open **http://localhost:3000** — log in with the credentials from your `.env` (`DASHBOARD_USER` / `DASHBOARD_PASS`, default: `123` / `123`).
