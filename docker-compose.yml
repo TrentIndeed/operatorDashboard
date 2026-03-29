@@ -36,6 +36,7 @@ services:
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
       - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-changeme}
+      - N8N_SECURE_COOKIE=false
       - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678}
       - DASHBOARD_API_URL=http://backend:8000
       - EMAIL_TO=${EMAIL_TO}
