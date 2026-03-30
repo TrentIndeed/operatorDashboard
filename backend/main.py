@@ -475,4 +475,13 @@ def verify_token(token: str, db: Session = Depends(get_db)):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.1.0"}
+    # Check Claude auth status file if it exists
+    claude_status = "unknown"
+    try:
+        with open("data/claude-auth-status.txt") as f:
+            content = f.read().strip()
+            claude_status = "ok" if content.startswith("OK") else "expired"
+    except FileNotFoundError:
+        pass
+
+    return {"status": "ok", "version": "0.1.0", "claude_auth": claude_status}
