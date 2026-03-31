@@ -5,12 +5,17 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 
-# Ensure data directory exists
-data_dir = Path(__file__).resolve().parent.parent.parent / "data"
-data_dir.mkdir(exist_ok=True)
-
-# Always use the resolved data_dir path — ignore .env DATABASE_URL for SQLite
-DATABASE_URL = f"sqlite:///{data_dir}/operator.db"
+# Use DATABASE_URL env var if set, otherwise default to ./data relative to backend/
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    data_dir = Path(__file__).resolve().parent.parent / "data"
+    data_dir.mkdir(exist_ok=True)
+    DATABASE_URL = f"sqlite:///{data_dir}/operator.db"
+else:
+    # Ensure the directory exists for sqlite paths
+    if DATABASE_URL.startswith("sqlite"):
+        db_path = DATABASE_URL.replace("sqlite:///", "").replace("sqlite://", "")
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
