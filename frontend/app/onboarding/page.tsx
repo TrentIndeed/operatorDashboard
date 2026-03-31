@@ -248,7 +248,7 @@ export default function OnboardingPage() {
               <textarea
                 value={llmPaste}
                 onChange={(e) => setLlmPaste(e.target.value)}
-                placeholder={"Example:\n\nI'm building mesh2param, a mesh-to-parametric CAD SaaS. Currently in stage 3 (surface segmentation). My main blocker is edge classification on curved surfaces.\n\nI'm also making AI automation content on TikTok. Goal is to reach 10K followers this quarter.\n\nThis week I need to finish the prototype and film 3 short videos..."}
+                placeholder={"Example:\n\nI'm building a SaaS product for [industry]. Currently in stage 3 (MVP development). My main blocker is [specific challenge].\n\nI'm also creating content on TikTok and YouTube. Goal is to reach 10K followers this quarter.\n\nThis week I need to ship the first feature and film 3 short videos..."}
                 className="w-full h-48 bg-[#111118] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-[var(--muted-foreground)]/50 focus:outline-none focus:border-purple-500/50 resize-none"
               />
               {error && <p className="text-sm text-red-400 mt-2">{error}</p>}
@@ -307,7 +307,7 @@ export default function OnboardingPage() {
                       type="text"
                       value={p.name}
                       onChange={(e) => updateProject(i, "name", e.target.value)}
-                      placeholder="Project name (e.g. mesh2param)"
+                      placeholder="Project name (e.g. My SaaS App)"
                       className="w-full bg-transparent border border-white/[0.06] rounded-lg px-3 py-2 text-sm text-white placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-purple-500/50"
                     />
                     <input

@@ -31,7 +31,7 @@ async def deploy_to_server(
     Args:
         ip: Server IP address
         env_vars: Dict of environment variables for .env
-        domain: Optional domain for HTTPS (e.g., "user123.dragonoperator.com")
+        domain: Optional domain for HTTPS (e.g., "user123.yourdomain.com")
         repo: Git repo URL (defaults to DEPLOY_REPO)
 
     Returns:
