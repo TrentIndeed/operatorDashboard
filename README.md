@@ -1,6 +1,8 @@
 # Operator Dashboard
 
-AI-powered command center for solo founders. Dark mission-control aesthetic. Claude as the reasoning engine.
+AI-powered command center for solo founders focused on **business growth**. Dark mission-control aesthetic. Claude as the reasoning engine.
+
+Every morning, Claude analyzes your projects, goals, and GitHub commits — then generates prioritized tasks (weighted toward outreach, networking, and content creation), content drafts, market opportunities, and a daily email briefing. Tasks fit your weekly availability schedule automatically.
 
 ## Prerequisites
 
@@ -461,28 +463,40 @@ operatorDashboard/
 
 | Page | Route | Description |
 |------|-------|-------------|
-| Login | `/login` | Username/password auth with 30-day cookie |
-| Command Center | `/` | Priority tasks, projects, goals, AI suggestions, daily briefing |
-| Content Studio | `/content` | Generate, review, approve/decline/remix content drafts (top 8 by hook score) |
-| Analytics | `/analytics` | Content scorecard with thumbnails, engagement trends, follower growth |
-| Stats | `/stats` | Best performing content, engagement breakdown, platform radar, posting heatmap |
-| Schedule | `/schedule` | 2-week/week/month calendar with content blocks + drafts needing approval |
-| Market Intel | `/market` | Market gaps, competitor tracking, similar content with thumbnails |
-| Leads & Outreach | `/leads` | Leads, comment replies, waitlist signups |
-| GitHub Progress | `/github` | Repository sync, commit history, project pipeline |
+| Landing | `/landing` | Marketing page (public) |
+| Login | `/login` | Username/password auth with 30-day cookie (public) |
+| Signup | `/signup` | Account creation with Local/Cloud toggle (public) |
+| Onboarding | `/onboarding` | Add projects + goals, optional LLM paste (public) |
+| Pricing | `/pricing` | Plan comparison: Local, Starter, Pro (public) |
+| Command Center | `/dashboard` | Priority tasks, goals, projects, suggestions, briefing, AI generate with progress bar |
+| Outreach | `/outreach` | Networking, DMs, comment replies, community engagement |
+| Content Studio | `/content` | Generate, review, approve/decline/remix drafts (top 8 by hook score) |
+| Schedule | `/schedule` | 2-week calendar with daily availability hours, off-day greying, draft blocks |
+| Market Intel | `/market` | Growth opportunities, competitors, similar content |
+| Analytics | `/analytics` | Scorecard, engagement trend, followers, views, pie chart, radar, heatmap |
+| GitHub | `/github` | Auto-discovered repos, active/inactive split, project pipelines |
+| Settings | `/settings` | Connections, weekly schedule, change password, delete account |
 
 ## Key Endpoints
 
 | Endpoint | Method | What it does |
 |----------|--------|-------------|
+| `/auth/signup` | POST | Create account (with optional Stripe checkout for cloud plans) |
 | `/auth/login` | POST | Authenticate and get session token |
-| `/ai/generate-all` | POST | One-click: tasks + drafts + schedule + briefing + market scan + GitHub sync |
-| `/ai/generate-tasks` | POST | Claude generates 5 priority tasks (replaces old AI tasks) |
-| `/ai/generate-draft` | POST | Claude generates a content draft |
+| `/ai/generate-all` | POST | One-click: tasks + drafts + schedule + briefing + market scan + social sync + GitHub sync (rate limited) |
+| `/ai/generate-tasks` | POST | Claude generates priority tasks that fit today's available hours (rate limited) |
+| `/ai/generate-draft` | POST | Claude generates a content draft (topic sanitized, rate limited) |
 | `/social/sync` | POST | Pull latest from YouTube, TikTok, Twitter |
-| `/github/sync-all` | POST | Sync all tracked GitHub repos |
-| `/market/scan` | POST | Claude scans for market gap opportunities |
+| `/github/sync-all` | POST | Auto-discover and sync ALL user repos from GitHub API |
+| `/market/scan` | POST | Claude scans for growth opportunities (rate limited) |
 | `/content/generate-hooks` | POST | Claude generates 3 hook variations with virality scores |
+| `/settings/schedule` | GET/POST | Get/set weekly availability hours per day |
+| `/settings/config` | GET | Connection status for all integrations |
+| `/settings/change-password` | POST | Change user password |
+| `/settings/delete-account` | POST | Delete account and all data |
+| `/billing/plans` | GET | Get available subscription plans |
+| `/billing/checkout` | POST | Create Stripe checkout session |
+| `/onboarding/parse` | POST | Claude extracts projects + goals from free text (rate limited) |
 
 ---
 
@@ -511,6 +525,38 @@ When set up, the **Daily Operator Briefing** workflow runs every morning:
 | `tasks` | List all pending tasks |
 
 ---
+
+## AI Security
+
+All AI calls are protected against prompt injection and token abuse:
+
+- **Prompt injection filtering**: 13 known patterns stripped (case-insensitive): "ignore previous instructions", "you are now", "jailbreak", etc.
+- **Rate limiting (two layers)**:
+  - CLI level: `AI_MAX_CALLS_PER_HOUR=30` — max Claude subprocess calls
+  - API level: `AI_ENDPOINT_LIMIT_PER_HOUR=10` — max endpoint hits per hour
+  - Returns `429 Too Many Requests` when exceeded
+- **Length caps**: prompts 8K chars, context 12K chars, user topics 500 chars
+- **All configurable** via `.env` variables
+
+## Weekly Availability
+
+Users set available hours per day in Settings (sliders, 0-12h per day):
+
+- AI Generate reads today's hours and creates tasks that fit the time budget
+- 0 hours = day off, no tasks generated
+- Calendar shows "off" badges on unavailable days, hour counts on work days
+- Content drafts auto-schedule to next available day (skip off days)
+- Example: Mon-Wed 2h (3 light tasks), Thu 0h (off), Fri-Sun 5h (7 tasks)
+
+## Growth-First AI
+
+AI prompts are tuned for business growth, not just development:
+
+- **Tasks**: 2-3 growth tasks (outreach, networking, content) + 1-2 product tasks per day
+- **Suggestions**: Must name specific platforms, subreddits, Discord servers — not generic advice
+- **Market scan**: Finds communities to join, content gaps, people asking for your solution
+- **Briefing**: Growth opportunities, platform changes, competitor moves
+- **Content**: Build-in-public, tutorials, customer demos — not technical deep-dives
 
 ## Troubleshooting
 
@@ -554,6 +600,22 @@ When set up, the **Daily Operator Briefing** workflow runs every morning:
 
 **Hydration mismatch errors in browser**
 - Caused by Dark Reader browser extension — disable for your dashboard URL
+
+**Login says "invalid" after VPS rebuild**
+- `AUTH_SECRET` must be persistent in `.env` — if missing, password hashes change on restart
+- Fix: set `AUTH_SECRET=some_fixed_value` in VPS `.env` and recreate the account
+
+**429 Too Many Requests on AI endpoints**
+- Rate limit exceeded — wait an hour or increase `AI_ENDPOINT_LIMIT_PER_HOUR` in `.env`
+
+**New DB column not found after code update**
+- SQLAlchemy `create_all` only creates new tables, not columns
+- Fix: `ALTER TABLE tablename ADD COLUMN columnname TYPE DEFAULT value` manually
+
+**Data lost after docker rebuild**
+- DB must be at `/app/data/operator.db` (mounted volume), not `/data/operator.db`
+- Dockerfile should have `ENV DATABASE_URL=sqlite:////app/data/operator.db`
+- Remove any `DATABASE_URL` from `.env` on VPS — let the Dockerfile set it
 
 ## Maintenance
 
