@@ -435,11 +435,32 @@ def _bg_generate_draft_and_schedule(topic: str, platform: str, content_type: str
         db.close()
 
 
+# --- AI Rate Limiting ---
+import time as _time
+
+_ai_endpoint_timestamps: list[float] = []
+_AI_ENDPOINT_LIMIT = int(os.getenv("AI_ENDPOINT_LIMIT_PER_HOUR", "10"))
+
+
+def _check_ai_endpoint_limit():
+    """Prevent spamming AI endpoints. Raises HTTPException if too many calls."""
+    now = _time.time()
+    cutoff = now - 3600
+    _ai_endpoint_timestamps[:] = [t for t in _ai_endpoint_timestamps if t > cutoff]
+    if len(_ai_endpoint_timestamps) >= _AI_ENDPOINT_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit: {_AI_ENDPOINT_LIMIT} AI calls per hour. Try again later.",
+        )
+    _ai_endpoint_timestamps.append(now)
+
+
 # --- AI Action Endpoints ---
 
 @app.post("/ai/generate-tasks")
 async def ai_generate_tasks(background_tasks: BackgroundTasks):
     """Ask Claude to generate today's top priority tasks."""
+    _check_ai_endpoint_limit()
     background_tasks.add_task(_bg_generate_tasks)
     return {"status": "generating", "message": "Claude is prioritizing your tasks..."}
 
@@ -447,6 +468,7 @@ async def ai_generate_tasks(background_tasks: BackgroundTasks):
 @app.post("/ai/generate-suggestions")
 async def ai_generate_suggestions(background_tasks: BackgroundTasks):
     """Ask Claude to generate fresh AI suggestions."""
+    _check_ai_endpoint_limit()
     background_tasks.add_task(_bg_generate_suggestions)
     return {"status": "generating", "message": "Claude is generating suggestions..."}
 
@@ -460,6 +482,12 @@ async def ai_generate_draft(
     db: Session = Depends(get_db),
 ):
     """Ask Claude to generate a content draft (synchronous)."""
+    _check_ai_endpoint_limit()
+    # Sanitize user-supplied topic
+    if len(topic) > 500:
+        raise HTTPException(status_code=400, detail="Topic too long (max 500 chars)")
+    from agents.reasoning import _sanitize_prompt
+    topic = _sanitize_prompt(topic)
     from agents.content_drafter import generate_draft
     result = generate_draft(topic, platform, content_type, project_tag)
     draft = ContentDraft(
@@ -486,8 +514,10 @@ async def ai_generate_draft(
 async def ai_generate_all(background_tasks: BackgroundTasks):
     """One-click AI Generate: tasks, drafts, schedule, market scan, GitHub sync.
 
-    Runs everything in background so the frontend gets an instant response.
+    Rate limited and runs everything in background so the frontend gets an instant response.
     """
+    _check_ai_endpoint_limit()
+
     # 1. Generate priority tasks
     background_tasks.add_task(_bg_generate_tasks)
 
@@ -641,11 +671,15 @@ def verify_token(token: str, db: Session = Depends(get_db)):
 @app.post("/onboarding/parse")
 def parse_onboarding_text(body: dict):
     """Parse free-text (from an LLM conversation or notes) into structured projects and goals."""
-    from agents.reasoning import reason_json
+    _check_ai_endpoint_limit()
+    from agents.reasoning import reason_json, _sanitize_prompt
 
     text = body.get("text", "")
     if not text.strip():
         raise HTTPException(status_code=400, detail="No text provided")
+    if len(text) > 5000:
+        raise HTTPException(status_code=400, detail="Text too long (max 5000 chars)")
+    text = _sanitize_prompt(text)
 
     prompt = f"""Extract projects and goals from this text. Return JSON with two arrays.
 

@@ -65,12 +65,83 @@ Always respond with valid JSON unless explicitly told otherwise.
 """
 
 
+# --- Rate limiting and token protection ---
+import time
+import threading
+
+_call_lock = threading.Lock()
+_call_timestamps: list[float] = []
+
+# Limits
+MAX_CALLS_PER_HOUR = int(os.getenv("AI_MAX_CALLS_PER_HOUR", "30"))
+MAX_PROMPT_CHARS = int(os.getenv("AI_MAX_PROMPT_CHARS", "8000"))
+MAX_CONTEXT_CHARS = int(os.getenv("AI_MAX_CONTEXT_CHARS", "12000"))
+
+# Prompt injection patterns to strip
+_INJECTION_PATTERNS = [
+    "ignore previous instructions",
+    "ignore all instructions",
+    "disregard the above",
+    "forget your instructions",
+    "you are now",
+    "new system prompt",
+    "override system",
+    "act as",
+    "pretend you are",
+    "jailbreak",
+    "do anything now",
+    "developer mode",
+]
+
+
+def _sanitize_prompt(prompt: str) -> str:
+    """Strip known prompt injection patterns and enforce length limits."""
+    # Truncate to max length
+    if len(prompt) > MAX_PROMPT_CHARS:
+        prompt = prompt[:MAX_PROMPT_CHARS] + "\n[TRUNCATED — prompt too long]"
+
+    # Strip injection attempts (case-insensitive)
+    lower = prompt.lower()
+    for pattern in _INJECTION_PATTERNS:
+        if pattern in lower:
+            prompt = prompt.replace(pattern, "[FILTERED]")
+            prompt = prompt.replace(pattern.title(), "[FILTERED]")
+            prompt = prompt.replace(pattern.upper(), "[FILTERED]")
+            print(f"[Security] Stripped injection pattern: '{pattern}'")
+
+    return prompt
+
+
+def _check_rate_limit():
+    """Enforce hourly call limit. Raises RuntimeError if exceeded."""
+    with _call_lock:
+        now = time.time()
+        cutoff = now - 3600  # 1 hour window
+        _call_timestamps[:] = [t for t in _call_timestamps if t > cutoff]
+        if len(_call_timestamps) >= MAX_CALLS_PER_HOUR:
+            raise RuntimeError(
+                f"Rate limit exceeded: {len(_call_timestamps)}/{MAX_CALLS_PER_HOUR} calls in the last hour. "
+                "Wait before making more AI calls."
+            )
+        _call_timestamps.append(now)
+
+
 def _call_claude(prompt: str, model: str = FAST_MODEL) -> str:
     """
     Call Claude via the CLI. Uses OAuth from your Claude Code login.
     Returns the raw response text.
+
+    Protections:
+    - Prompt injection patterns stripped
+    - Prompt length capped at MAX_PROMPT_CHARS
+    - Rate limited to MAX_CALLS_PER_HOUR
+    - Subprocess timeout at 180s
     """
-    print(f"[Claude] Calling CLI at: {CLAUDE_BIN} (prompt length: {len(prompt)})")
+    # Sanitize and rate limit
+    prompt = _sanitize_prompt(prompt)
+    _check_rate_limit()
+
+    print(f"[Claude] Calling CLI at: {CLAUDE_BIN} (prompt length: {len(prompt)}, calls this hour: {len(_call_timestamps)})")
 
     # Write prompt to a temp file to avoid Windows command-line length/encoding issues
     import tempfile
@@ -146,9 +217,13 @@ def reason(
 ) -> str:
     """
     Core reasoning call. Returns raw text from Claude.
+    Context is truncated to MAX_CONTEXT_CHARS to prevent token abuse.
     """
     if context:
-        full = f"Context:\n{json.dumps(context, indent=2, default=str)}\n\n{prompt}"
+        ctx_str = json.dumps(context, indent=2, default=str)
+        if len(ctx_str) > MAX_CONTEXT_CHARS:
+            ctx_str = ctx_str[:MAX_CONTEXT_CHARS] + "\n... [CONTEXT TRUNCATED]"
+        full = f"Context:\n{ctx_str}\n\n{prompt}"
     else:
         full = prompt
 
