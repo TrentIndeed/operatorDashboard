@@ -15,19 +15,26 @@ def scan_market_gaps(db):
         f"- {p.name}: {p.description or 'No description'}" for p in projects
     ) or "- No projects configured yet"
 
-    prompt = f"""Analyze the current market landscape for these projects and generate exactly 5 market gap opportunities as a JSON array.
+    prompt = f"""Find 5 GROWTH OPPORTUNITIES for a solo founder building these projects. Focus on places to find clients, build audience, and generate revenue — not just product gaps.
 
 Projects:
 {project_lines}
 
-For each gap, return:
+Look for:
+- Communities (Reddit, Discord, forums) with active discussions the founder should join
+- Content gaps (topics nobody is covering well on TikTok/YouTube in this niche)
+- Outreach opportunities (people asking for solutions the founder builds)
+- Competitor weaknesses (what they're bad at that the founder can exploit)
+- Trending topics the founder can ride for visibility
+
+For each opportunity, return:
 {{
-  "description": "Clear description of the gap or opportunity",
-  "source": "reddit | hackernews | twitter | forum",
+  "description": "Clear description of the growth opportunity",
+  "source": "reddit | hackernews | twitter | discord | youtube | tiktok | forum | linkedin",
   "source_url": "",
   "opportunity_score": 0.0 to 1.0,
-  "suggested_action": "Specific action to take",
-  "category": "product | content | market"
+  "suggested_action": "Specific action to take TODAY (be precise — name the subreddit, Discord, or platform)",
+  "category": "outreach | content | growth | market"
 }}
 
 Return ONLY a JSON array of 5 objects, no extra text."""

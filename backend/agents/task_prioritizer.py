@@ -10,28 +10,45 @@ from agents.reasoning import reason_json, FAST_MODEL
 from db.database import Task, Project, Goal, AISuggestion
 
 
-PRIORITIZE_PROMPT = """Given the current state of the operator dashboard, generate and rank today's top 5 tasks.
+PRIORITIZE_PROMPT = """Generate today's top 5 tasks for a solo founder focused on GROWING their business. The mix should be:
+
+- 2-3 GROWTH tasks (outreach, networking, content, community engagement)
+- 1-2 PRODUCT tasks (only if there's a critical blocker or shipping deadline)
+- 0-1 ADMIN tasks (only if absolutely necessary)
+
+GROWTH task examples (be specific, not generic):
+- "Reply to 10 comments on Reddit r/[relevant subreddit] about [topic]"
+- "Film a 60-second TikTok showing [specific demo/result]"
+- "DM 5 people on Twitter who posted about [topic] this week"
+- "Post a build-in-public update thread on Twitter with screenshots"
+- "Join 2 Discord servers in [niche] and introduce yourself with value"
+- "Write a HackerNews Show HN post about [project]"
+- "Comment on 5 YouTube videos in [niche] with genuine insights"
+- "Create an Instagram carousel: '5 things I learned building [X]'"
+- "Cold email 3 potential beta users found on [platform]"
+- "Record a YouTube tutorial: 'How to [solve specific problem]'"
+- "Post in 3 IndieHackers/Reddit threads with helpful answers (soft CTA)"
+- "Reply to every comment on your last TikTok/YouTube video"
+- "Send a LinkedIn post about your latest milestone"
 
 Each task must:
-- Have a clear, specific title
-- Explain WHY it matters right now (tie to revenue, growth, or risk mitigation)
+- Have a SPECIFIC, actionable title (not vague like "do outreach")
+- Explain WHY it matters for growth (tie to audience, clients, or revenue)
 - Have a realistic time estimate
-- Be tagged to the right project
-
-Use the project slugs from the context as project_tag values.
+- Be tagged to the right project using slugs from context
 
 Scoring guide (priority_score 0-10):
-- 9-10: Blocks revenue or has expiring time window (trending topic, competitor launch)
-- 7-8: High-growth impact (content that could go viral, key feature for waitlist)
-- 5-6: Important but not urgent (regular dev work, scheduled content)
-- 3-4: Nice to have (documentation, minor improvements)
-- 1-2: Backlog (exploratory, low priority)
+- 9-10: Revenue-generating or time-sensitive growth opportunity
+- 7-8: High-audience-growth impact (content that could go viral, community with hot discussion)
+- 5-6: Steady growth (regular posting, routine engagement)
+- 3-4: Product work (development, bug fixes)
+- 1-2: Admin/maintenance
 
 Respond with a JSON array of tasks:
 [
   {
-    "title": "string",
-    "why": "string — 1-2 sentences on why this matters today",
+    "title": "string — specific and actionable",
+    "why": "string — 1-2 sentences on why this grows the business today",
     "estimated_minutes": integer,
     "project_tag": "string",
     "priority_score": float
@@ -117,18 +134,23 @@ def generate_priority_tasks(
     return new_tasks
 
 
-SUGGESTIONS_PROMPT = """Based on the current project state and market context, generate 5 high-signal AI suggestions for the operator.
+SUGGESTIONS_PROMPT = """Generate 5 HIGH-IMPACT growth suggestions for a solo founder. Focus on getting clients, building audience, and generating revenue.
 
-Each suggestion should be:
-- Specific and actionable (not generic advice)
-- Tied to a real opportunity or risk
-- Categorized: content | product | growth | market
+Categories:
+- outreach: networking, DMs, cold outreach, community engagement, partnerships
+- content: social media strategy, video ideas, post hooks, content gaps
+- growth: audience building, virality tactics, SEO, lead generation
+- market: competitor gaps, underserved niches, trending opportunities
+
+At least 3 of 5 suggestions should be about OUTREACH or CONTENT (not product).
+
+Each suggestion should name specific platforms, communities, or tactics — not generic advice like "post more content."
 
 Respond with JSON:
 [
   {
-    "body": "string — the suggestion (1-3 sentences, direct and specific)",
-    "category": "content | product | growth | market"
+    "body": "string — the suggestion (1-3 sentences, direct and specific with named platforms/communities)",
+    "category": "outreach | content | growth | market"
   }
 ]
 """

@@ -130,15 +130,22 @@ def _bg_generate_briefing():
             "projects": [{"name": p.name, "description": p.description} for p in projects],
         }
 
-        prompt = """Generate 5 news/industry briefing items relevant to the founder's projects today.
+        prompt = """Generate 5 briefing items for a solo founder focused on business growth. Mix of:
 
-Return ONLY a JSON array of 5 objects, no wrapper object. Each object:
+- 2 items about growth opportunities (trending topics, viral formats, community discussions to join)
+- 1 item about competitors or market shifts
+- 1 item about platform/algorithm changes (TikTok, YouTube, Twitter, Reddit)
+- 1 item about the founder's industry/niche
+
+Each should include a SPECIFIC action the founder can take TODAY.
+
+Return ONLY a JSON array of 5 objects:
 {
   "headline": "Short headline",
   "summary": "1-2 sentence summary",
-  "category": "ai | competitor | marketing | cad | industry",
+  "category": "growth | competitor | platform | industry | content",
   "relevance_score": 0.0 to 1.0,
-  "suggested_action": "What the founder should do"
+  "suggested_action": "Specific action to take today"
 }
 
 Return ONLY the JSON array, nothing else."""
@@ -479,13 +486,13 @@ async def ai_generate_all(background_tasks: BackgroundTasks):
 
     background_tasks.add_task(
         _bg_generate_draft_and_schedule,
-        "Building in public: latest progress update",
-        "tiktok", "short-form", _p1_tag, 1,  # tomorrow
+        "Build in public: show a real result or milestone from this week — make it shareable and save-worthy",
+        "tiktok", "short-form", _p1_tag, 1,
     )
     background_tasks.add_task(
         _bg_generate_draft_and_schedule,
-        "Technical deep dive on latest engineering challenge",
-        "youtube", "script", _p2_tag, 3,  # 3 days from now
+        "Tutorial or demo that solves a real problem for potential customers — optimize for SEO and watch time",
+        "youtube", "script", _p2_tag, 3,
     )
 
     # 4. Generate today's briefing
