@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -X POST https://api.dragonoperator.com/auth/signup -H \"Content-Type: application/json\" -d '{\"\"username\"\":\"\"123\"\",\"\"password\"\":\"\"123\"\",\"\"plan\"\":\"\"local\"\"}')"
+    ]
+  }
+}

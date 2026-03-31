@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+
 import { api, Project, GithubRepo } from "@/lib/api";
 import {
   GitBranch,
@@ -71,11 +71,11 @@ function PipelineVisualization({ project }: { project: Project }) {
       </div>
 
       {/* Pipeline visualization */}
-      <div className="flex items-center justify-between relative py-4">
+      <div className="flex items-center justify-between relative py-3">
         {/* Connection line */}
-        <div className="absolute top-1/2 left-6 right-6 h-0.5 bg-[var(--border)] -translate-y-1/2" />
+        <div className="absolute top-1/2 left-4 right-4 h-px bg-white/[0.08] -translate-y-1/2" />
         <div
-          className="absolute top-1/2 left-6 h-0.5 bg-gradient-to-r from-emerald-500 to-purple-500 -translate-y-1/2 transition-all duration-700"
+          className="absolute top-1/2 left-4 h-px bg-purple-500/60 -translate-y-1/2"
           style={{
             width: `${Math.max(0, ((currentStage - 0.5) / totalStages) * 100)}%`,
             maxWidth: "calc(100% - 48px)",
@@ -90,26 +90,21 @@ function PipelineVisualization({ project }: { project: Project }) {
 
           return (
             <div key={stage} className="relative z-10 flex flex-col items-center" style={{ flex: 1 }}>
-              <motion.div
-                initial={{ scale: 0.8 }}
-                animate={{ scale: 1 }}
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-caption font-bold transition-all ${
+              <div
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold ${
                   isCompleted
-                    ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-[0_0_16px_rgba(16,185,129,0.3)]"
+                    ? "bg-emerald-500 text-white"
                     : isCurrent
-                      ? "bg-gradient-to-br from-purple-500 to-violet-600 text-white shadow-[0_0_20px_rgba(168,85,247,0.4)]"
-                      : "bg-[var(--muted)] text-[var(--muted-foreground)]"
+                      ? "bg-purple-500 text-white"
+                      : "bg-white/[0.08] text-[var(--muted-foreground)]"
                 }`}
               >
                 {isCompleted ? (
-                  <CheckCircle2 className="w-5 h-5" />
+                  <CheckCircle2 className="w-3.5 h-3.5" />
                 ) : (
                   stageNum
                 )}
-                {isCurrent && (
-                  <div className="absolute inset-0 rounded-full bg-purple-500/30 animate-ping" />
-                )}
-              </motion.div>
+              </div>
               <span
                 className={`text-caption mt-2 text-center max-w-[80px] ${
                   isCurrent ? "text-purple-300 font-semibold" : isFuture ? "text-[var(--muted-foreground)]/50" : "text-[var(--muted-foreground)]"
@@ -186,9 +181,7 @@ function RepoCard({
   syncing: boolean;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
+    <div
       className="glass-card rounded-2xl p-5 space-y-3"
     >
       <div className="flex items-start justify-between">
@@ -254,7 +247,7 @@ function RepoCard({
           </div>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }
 

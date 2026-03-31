@@ -209,12 +209,53 @@ def _bg_sync_github():
         asyncio.run(_do_sync())
 
 
+def _bg_sync_social():
+    """Background: sync social media platforms."""
+    import asyncio
+
+    async def _do_sync():
+        from db.database import SessionLocal
+        from api.social_sync import sync_all_platforms
+        db = SessionLocal()
+        try:
+            result = await sync_all_platforms(db)
+            print(f"[Social] Synced: {result}")
+        except Exception as e:
+            print(f"[Social] sync failed: {e}")
+        finally:
+            db.close()
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.ensure_future(_do_sync())
+        else:
+            asyncio.run(_do_sync())
+    except RuntimeError:
+        asyncio.run(_do_sync())
+
+
 def _bg_generate_draft_and_schedule(topic: str, platform: str, content_type: str, project_tag: str, day_offset: int = 1):
-    """Background: generate a content draft and schedule it day_offset days from now."""
+    """Background: generate a content draft and schedule it day_offset days from now.
+    Replaces old AI-generated drafts for the same platform to avoid duplicates."""
     from db.database import SessionLocal
     from agents.content_drafter import generate_draft
     db = SessionLocal()
     try:
+        # Remove old AI-generated draft drafts for this platform (replace, don't stack)
+        old_drafts = (
+            db.query(ContentDraft)
+            .filter(ContentDraft.ai_generated == True, ContentDraft.platform == platform, ContentDraft.status == "draft")
+            .all()
+        )
+        old_draft_ids = [d.id for d in old_drafts]
+        for d in old_drafts:
+            db.delete(d)
+        # Also remove their schedule items
+        if old_draft_ids:
+            db.query(ContentScheduleItem).filter(ContentScheduleItem.draft_id.in_(old_draft_ids)).delete(synchronize_session=False)
+        db.commit()
+
         result = generate_draft(topic, platform, content_type, project_tag)
         if not isinstance(result, dict):
             print(f"[AI] generate_draft returned non-dict: {type(result)}")
@@ -362,9 +403,12 @@ async def ai_generate_all(background_tasks: BackgroundTasks):
     # 6. Sync GitHub repos
     background_tasks.add_task(_bg_sync_github)
 
+    # 7. Sync social media (YouTube, TikTok, Twitter)
+    background_tasks.add_task(_bg_sync_social)
+
     return {
         "status": "generating",
-        "message": "AI is generating tasks, drafts, briefing, scanning market, and syncing GitHub...",
+        "message": "AI is generating tasks, drafts, briefing, scanning market, and syncing everything...",
         "queued": [
             "generate_tasks",
             "generate_suggestions",
@@ -373,6 +417,7 @@ async def ai_generate_all(background_tasks: BackgroundTasks):
             "generate_briefing",
             "scan_market",
             "sync_github",
+            "sync_social",
         ],
     }
 
@@ -471,6 +516,36 @@ def verify_token(token: str, db: Session = Depends(get_db)):
         if _make_token(user.username) == token:
             return {"status": "ok", "username": user.username}
     raise HTTPException(status_code=401, detail="Invalid token")
+
+
+@app.post("/onboarding/parse")
+def parse_onboarding_text(body: dict):
+    """Parse free-text (from an LLM conversation or notes) into structured projects and goals."""
+    from agents.reasoning import reason_json
+
+    text = body.get("text", "")
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="No text provided")
+
+    prompt = f"""Extract projects and goals from this text. Return JSON with two arrays.
+
+For each project: name, description, github_repo (if mentioned, else empty string)
+For each goal: title, timeframe (week, month, or quarter — infer from context)
+
+Text:
+{text}
+
+Return ONLY this JSON format:
+{{
+  "projects": [{{"name": "str", "description": "str", "github_repo": "str"}}],
+  "goals": [{{"title": "str", "timeframe": "week|month|quarter"}}]
+}}"""
+
+    try:
+        result = reason_json(prompt)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse: {e}")
 
 
 @app.get("/health")

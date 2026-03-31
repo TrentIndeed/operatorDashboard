@@ -27,7 +27,9 @@
       "Bash(python -c \"import sys,json; d=json.loads\\(sys.stdin.read\\(\\)\\); print\\(f''''{len\\(d\\)} suggestions''''\\)\")",
       "Bash(ssh root@5.161.100.230 \"\\(crontab -l 2>/dev/null; echo ''0 6 * * * /opt/claude-health-check.sh''\\) | crontab - && echo ''Cron added'' && crontab -l\")",
       "Bash(ssh root@5.161.100.230 \"mkdir -p /opt/operatorDashboard/data && /opt/claude-health-check.sh && cat /opt/operatorDashboard/data/claude-auth-status.txt\")",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }

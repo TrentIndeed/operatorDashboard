@@ -65,7 +65,7 @@ function SignupForm() {
       if (plan !== "local" && data.checkout_url) {
         window.location.href = data.checkout_url;
       } else {
-        router.push("/dashboard");
+        router.push("/onboarding");
       }
     } catch {
       setError("Cannot reach backend");
