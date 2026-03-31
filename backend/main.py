@@ -190,11 +190,16 @@ def _bg_sync_github():
             # Sync all projects that have a github_repo set
             projects = db.query(Project).filter(Project.github_repo.isnot(None)).all()
             for p in projects:
+                if not p.github_repo:
+                    continue
                 try:
                     await sync_repo(owner, p.github_repo, db)
                     print(f"[GitHub] synced {p.github_repo}")
                 except Exception as e:
                     print(f"[GitHub] sync {p.github_repo} failed: {e}")
+
+            # After syncing, ask Claude to update project stages based on commit history
+            _update_project_stages_from_commits(db, owner)
         finally:
             db.close()
 
@@ -207,6 +212,95 @@ def _bg_sync_github():
             asyncio.run(_do_sync())
     except RuntimeError:
         asyncio.run(_do_sync())
+
+
+def _update_project_stages_from_commits(db, owner: str):
+    """After GitHub sync, ask Claude to infer project stages from recent commits."""
+    from db.database import GithubRepo
+    from agents.reasoning import reason_json
+    import httpx
+
+    projects = db.query(Project).filter(Project.github_repo.isnot(None)).all()
+    if not projects:
+        return
+
+    token = os.getenv("GITHUB_TOKEN")
+    if not token:
+        return
+
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+
+    project_data = []
+    for p in projects:
+        if not p.github_repo:
+            continue
+        # Fetch last 10 commits
+        try:
+            import httpx as hx
+            resp = hx.get(
+                f"https://api.github.com/repos/{owner}/{p.github_repo}/commits",
+                headers=headers,
+                params={"per_page": 10},
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                continue
+            commits = [c["commit"]["message"].split("\n")[0][:80] for c in resp.json()]
+        except Exception:
+            commits = []
+
+        project_data.append({
+            "name": p.name,
+            "slug": p.slug,
+            "description": p.description,
+            "current_stage": p.current_stage,
+            "total_stages": p.total_stages,
+            "stage_label": p.stage_label,
+            "recent_commits": commits,
+        })
+
+    if not project_data:
+        return
+
+    prompt = """Based on the recent commits for each project, update the project stage, stage_label, blockers, and next_milestone.
+
+Return a JSON array with one object per project:
+[
+  {
+    "slug": "project-slug",
+    "current_stage": integer (1 to total_stages),
+    "stage_label": "Current stage description based on what commits show",
+    "blockers": "Any apparent blockers from commit messages, or null",
+    "next_milestone": "What should come next"
+  }
+]
+
+Only update stages if the commits clearly indicate progress. If unsure, keep the current stage."""
+
+    try:
+        result = reason_json(prompt, context={"projects": project_data})
+        if not isinstance(result, list):
+            result = next((v for v in result.values() if isinstance(v, list)), []) if isinstance(result, dict) else []
+
+        for update in result:
+            if not isinstance(update, dict) or "slug" not in update:
+                continue
+            p = db.query(Project).filter(Project.slug == update["slug"]).first()
+            if not p:
+                continue
+            if "current_stage" in update:
+                p.current_stage = min(int(update["current_stage"]), p.total_stages)
+            if update.get("stage_label"):
+                p.stage_label = update["stage_label"]
+            if "blockers" in update:
+                p.blockers = update["blockers"] if update["blockers"] else None
+            if update.get("next_milestone"):
+                p.next_milestone = update["next_milestone"]
+
+        db.commit()
+        print(f"[AI] Updated {len(result)} project stages from commits")
+    except Exception as e:
+        print(f"[AI] Project stage update failed: {e}")
 
 
 def _bg_sync_social():
