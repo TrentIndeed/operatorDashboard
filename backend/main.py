@@ -364,9 +364,26 @@ def _bg_generate_draft_and_schedule(topic: str, platform: str, content_type: str
             print(f"[AI] generate_draft returned non-dict: {type(result)}")
             return
 
-        # Schedule on the specified day offset — ignore Claude's suggested time
-        # to avoid stacking multiple drafts on the same day
+        # Schedule on the next available day (skip days off)
+        import json as _json
+        from db.database import User
+        user = db.query(User).first()
+        day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        user_schedule = {}
+        if user and user.weekly_hours:
+            try:
+                user_schedule = _json.loads(user.weekly_hours)
+            except (_json.JSONDecodeError, TypeError):
+                pass
+
+        # Find next available day starting from day_offset
         sched_dt = datetime.utcnow() + timedelta(days=day_offset)
+        for attempt in range(7):
+            day_key = day_names[sched_dt.weekday()]
+            if user_schedule.get(day_key, 2) > 0:
+                break
+            sched_dt += timedelta(days=1)
+
         sched_dt = sched_dt.replace(hour=10, minute=0, second=0, microsecond=0)
         sched_time_str = sched_dt.isoformat()
 

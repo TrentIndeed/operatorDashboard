@@ -234,19 +234,29 @@ export default function SchedulePage() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [weeklyHours, setWeeklyHours] = useState<Record<string, number>>({
+    mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 0, sun: 0,
+  });
 
   // IDs of draft-generated schedule items (to show "needs approval" badge)
   const draftItemIds = useMemo(() => new Set(draftItems.map((d) => d.id)), [draftItems]);
 
+  // Map JS getDay() (0=Sun) to our day keys
+  const getDayKey = (date: Date): string => {
+    const keys = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+    return keys[date.getDay()];
+  };
+
   const fetchItems = useCallback(async () => {
     try {
-      // Fetch a wide range covering the visible calendar (prev month padding through next month padding)
       const start = new Date(year, month - 1, 1);
       const end = new Date(year, month + 2, 0);
-      const [data, drafts] = await Promise.all([
+      const [data, drafts, sched] = await Promise.all([
         api.getSchedule(formatDateISO(start), formatDateISO(end)),
         api.getDrafts("draft"),
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/settings/schedule`).then((r) => r.json()).catch(() => null),
       ]);
+      if (sched && typeof sched === "object") setWeeklyHours(sched);
 
       // Convert Content Studio drafts to virtual schedule items
       // Skip drafts that already have a real schedule item (to avoid duplicates)
@@ -551,19 +561,24 @@ export default function SchedulePage() {
               const dayEvents = eventsByDate[key] || [];
               const isToday = isSameDay(date, today);
               const showDayName = viewMode !== "month";
+              const dayKey = getDayKey(date);
+              const hoursAvail = weeklyHours[dayKey] ?? 0;
+              const isDayOff = hoursAvail === 0;
 
               return (
                 <div
                   key={idx}
-                  className={`border border-white/[0.04] p-2 transition-colors hover:bg-white/[0.02] ${
-                    isToday ? "border-purple-500/60" : ""
-                  } ${!inMonth ? "opacity-30" : ""}`}
+                  className={`border border-white/[0.04] p-2 transition-colors ${
+                    isDayOff && inMonth ? "bg-red-500/[0.03]" : "hover:bg-white/[0.02]"
+                  } ${isToday ? "border-purple-500/60" : ""} ${!inMonth ? "opacity-30" : ""}`}
                 >
                   <div
                     className={`text-[12px] font-medium mb-1.5 flex items-center gap-1.5 ${
                       isToday
                         ? "text-purple-400"
-                        : "text-[var(--muted-foreground)]"
+                        : isDayOff
+                          ? "text-red-400/60"
+                          : "text-[var(--muted-foreground)]"
                     }`}
                   >
                     <span
@@ -578,6 +593,17 @@ export default function SchedulePage() {
                     {showDayName && (
                       <span className="text-[11px]">
                         {date.toLocaleDateString("en-US", { weekday: "short", month: "short" })}
+                      </span>
+                    )}
+                    {/* Hours badge */}
+                    {inMonth && !isDayOff && hoursAvail > 0 && (
+                      <span className="text-[9px] px-1 py-0 rounded bg-purple-500/15 text-purple-300 ml-auto">
+                        {hoursAvail}h
+                      </span>
+                    )}
+                    {inMonth && isDayOff && (
+                      <span className="text-[9px] px-1 py-0 rounded bg-red-500/15 text-red-400 ml-auto">
+                        off
                       </span>
                     )}
                   </div>
