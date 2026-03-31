@@ -10,6 +10,7 @@ services:
       - "8000:8000"
     env_file:
       - .env
+      - .env.vps
     volumes:
       - ./data:/app/data
       - ~/.claude:/root/.claude:ro
