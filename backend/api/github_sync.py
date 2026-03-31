@@ -142,7 +142,7 @@ async def sync_single_repo(owner: str, repo: str, db: Session = Depends(get_db))
 
 
 def _bg_sync_all_repos():
-    """Background wrapper: create own session for GitHub sync."""
+    """Background: auto-discover and sync ALL user repos from GitHub API."""
     import asyncio
     from db.database import SessionLocal
 
@@ -150,26 +150,34 @@ def _bg_sync_all_repos():
         db = SessionLocal()
         try:
             owner = os.getenv("GITHUB_OWNER")
-            if not owner:
+            token = os.getenv("GITHUB_TOKEN")
+            if not owner or not token:
                 return
 
-            repos = db.query(GithubRepo).all()
-            if repos:
-                for r in repos:
-                    try:
-                        await sync_repo(r.owner, r.name, db)
-                        print(f"[GitHub] synced {r.full_name}")
-                    except Exception as e:
-                        print(f"[GitHub] sync {r.full_name} failed: {e}")
-            else:
-                # First run: sync projects that have github_repo set
-                projects = db.query(Project).filter(Project.github_repo.isnot(None)).all()
-                for p in projects:
-                    try:
-                        await sync_repo(owner, p.github_repo, db)
-                        print(f"[GitHub] synced {p.github_repo}")
-                    except Exception as e:
-                        print(f"[GitHub] sync {p.github_repo} failed: {e}")
+            # Fetch all repos from GitHub (auto-discover, not manual)
+            headers = _github_headers()
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(
+                    f"{GITHUB_API}/user/repos",
+                    headers=headers,
+                    params={"per_page": 100, "sort": "pushed"},
+                )
+                if resp.status_code != 200:
+                    print(f"[GitHub] Failed to list repos: {resp.status_code}")
+                    return
+
+                all_repos = resp.json()
+
+            synced = 0
+            for repo_data in all_repos:
+                repo_name = repo_data["name"]
+                try:
+                    await sync_repo(owner, repo_name, db)
+                    synced += 1
+                except Exception as e:
+                    print(f"[GitHub] sync {repo_name} failed: {e}")
+
+            print(f"[GitHub] Synced {synced}/{len(all_repos)} repos")
         finally:
             db.close()
 
