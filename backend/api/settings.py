@@ -80,6 +80,39 @@ def delete_account(body: dict, db: Session = Depends(get_db)):
     return {"status": "ok", "message": "Account and all data deleted"}
 
 
+@router.get("/schedule")
+def get_weekly_schedule(db: Session = Depends(get_db)):
+    """Get user's weekly availability hours."""
+    import json
+    user = db.query(User).first()
+    if not user:
+        return {"mon": 2, "tue": 2, "wed": 2, "thu": 2, "fri": 2, "sat": 0, "sun": 0}
+    try:
+        return json.loads(user.weekly_hours or '{}')
+    except (json.JSONDecodeError, TypeError):
+        return {"mon": 2, "tue": 2, "wed": 2, "thu": 2, "fri": 2, "sat": 0, "sun": 0}
+
+
+@router.post("/schedule")
+def set_weekly_schedule(body: dict, db: Session = Depends(get_db)):
+    """Set user's weekly availability hours."""
+    import json
+    user = db.query(User).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No user found")
+
+    # Validate: each day should be 0-12 hours
+    days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    schedule = {}
+    for day in days:
+        hours = body.get(day, 0)
+        schedule[day] = max(0, min(12, int(hours)))
+
+    user.weekly_hours = json.dumps(schedule)
+    db.commit()
+    return schedule
+
+
 @router.get("/config")
 def get_config():
     """Get current configuration (non-sensitive values only)."""

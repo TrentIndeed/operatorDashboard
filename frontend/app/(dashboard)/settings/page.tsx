@@ -16,9 +16,20 @@ import {
   XCircle,
   Loader2,
   AlertTriangle,
+  Clock,
 } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+const DAYS = [
+  { key: "mon", label: "Monday" },
+  { key: "tue", label: "Tuesday" },
+  { key: "wed", label: "Wednesday" },
+  { key: "thu", label: "Thursday" },
+  { key: "fri", label: "Friday" },
+  { key: "sat", label: "Saturday" },
+  { key: "sun", label: "Sunday" },
+];
 
 interface Config {
   github_owner: string;
@@ -56,6 +67,13 @@ export default function SettingsPage() {
   const [config, setConfig] = useState<Config | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Weekly schedule
+  const [schedule, setSchedule] = useState<Record<string, number>>({
+    mon: 2, tue: 2, wed: 2, thu: 0, fri: 5, sat: 5, sun: 5,
+  });
+  const [schedLoading, setSchedLoading] = useState(false);
+  const [schedSaved, setSchedSaved] = useState(false);
+
   // Change password
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -77,12 +95,26 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
-    fetch(`${API}/settings/config`)
-      .then((r) => r.json())
-      .then(setConfig)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch(`${API}/settings/config`).then((r) => r.json()).then(setConfig).catch(() => {}),
+      fetch(`${API}/settings/schedule`).then((r) => r.json()).then(setSchedule).catch(() => {}),
+    ]).finally(() => setLoading(false));
   }, []);
+
+  const handleSaveSchedule = async () => {
+    setSchedLoading(true);
+    setSchedSaved(false);
+    try {
+      await fetch(`${API}/settings/schedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(schedule),
+      });
+      setSchedSaved(true);
+      setTimeout(() => setSchedSaved(false), 3000);
+    } catch {}
+    setSchedLoading(false);
+  };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,6 +222,60 @@ export default function SettingsPage() {
         ) : (
           <p className="text-body-sm text-red-400">Cannot load config</p>
         )}
+      </section>
+
+      {/* Weekly Availability */}
+      <section className="elevated-card rounded-2xl p-6">
+        <h2 className="text-subtitle text-white mb-2 flex items-center gap-2">
+          <Clock className="w-5 h-5 text-purple-400" />
+          Weekly Availability
+        </h2>
+        <p className="text-body-sm text-[var(--muted-foreground)] mb-5">
+          Set how many hours you can work each day. AI Generate will create tasks that fit your schedule.
+          Set 0 for days off.
+        </p>
+
+        <div className="space-y-3">
+          {DAYS.map(({ key, label }) => (
+            <div key={key} className="flex items-center gap-4">
+              <span className="text-body-sm text-white w-24">{label}</span>
+              <div className="flex items-center gap-2 flex-1">
+                <input
+                  type="range"
+                  min={0}
+                  max={12}
+                  step={0.5}
+                  value={schedule[key] || 0}
+                  onChange={(e) => setSchedule({ ...schedule, [key]: parseFloat(e.target.value) })}
+                  className="flex-1 accent-purple-500 h-1.5"
+                />
+                <span className={`text-body-sm font-bold w-12 text-right ${
+                  schedule[key] === 0 ? "text-red-400" : schedule[key] <= 2 ? "text-amber-400" : "text-emerald-400"
+                }`}>
+                  {schedule[key]}h
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-3 mt-5 pt-4 border-t border-white/[0.06]">
+          <div className="text-body-sm text-[var(--muted-foreground)]">
+            Total: <span className="text-white font-semibold">
+              {Object.values(schedule).reduce((a, b) => a + b, 0)}h/week
+            </span>
+          </div>
+          <div className="ml-auto flex items-center gap-3">
+            {schedSaved && <span className="text-caption text-emerald-400">Saved!</span>}
+            <button
+              onClick={handleSaveSchedule}
+              disabled={schedLoading}
+              className="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 transition-all"
+            >
+              {schedLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Schedule"}
+            </button>
+          </div>
+        </div>
       </section>
 
       {/* Environment Variables Guide */}

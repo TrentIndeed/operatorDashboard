@@ -6,8 +6,9 @@ from typing import List
 from datetime import datetime
 from sqlalchemy.orm import Session
 
+import json as _json
 from agents.reasoning import reason_json, FAST_MODEL
-from db.database import Task, Project, Goal, AISuggestion
+from db.database import Task, Project, Goal, AISuggestion, User
 
 
 PRIORITIZE_PROMPT = """Generate today's top 5 tasks for a solo founder focused on GROWING their business. The mix should be:
@@ -79,8 +80,25 @@ def generate_priority_tasks(
         .all()
     )
 
+    # Get today's available hours from user schedule
+    day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    today_day = day_names[datetime.utcnow().weekday()]
+    available_hours = 2  # default
+    user = db.query(User).first()
+    if user and user.weekly_hours:
+        try:
+            schedule = _json.loads(user.weekly_hours)
+            available_hours = schedule.get(today_day, 2)
+        except (_json.JSONDecodeError, TypeError):
+            pass
+
+    available_minutes = available_hours * 60
+
     context = {
         "date": datetime.utcnow().isoformat(),
+        "day_of_week": today_day,
+        "available_hours_today": available_hours,
+        "available_minutes_today": available_minutes,
         "projects": [
             {
                 "name": p.name,
@@ -101,7 +119,18 @@ def generate_priority_tasks(
         ],
     }
 
-    tasks_data = reason_json(PRIORITIZE_PROMPT, context=context)
+    # Adjust task count based on available time
+    if available_hours == 0:
+        # Day off — no tasks
+        return []
+    elif available_hours <= 2:
+        n = 3  # light day
+    elif available_hours <= 4:
+        n = 5  # normal day
+    else:
+        n = 7  # heavy day
+
+    tasks_data = reason_json(PRIORITIZE_PROMPT + f"\n\nIMPORTANT: The user has {available_hours} hours ({available_minutes} minutes) available today ({today_day}). Generate tasks that total APPROXIMATELY {available_minutes} minutes. If 0 hours, return an empty array.", context=context)
 
     # Remove old AI-generated pending tasks (replace, don't stack)
     old_ai_tasks = (
