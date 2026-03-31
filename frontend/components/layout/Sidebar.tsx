@@ -17,6 +17,7 @@ import {
   Menu,
   X,
   LogOut,
+  Settings,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { href: "/schedule", label: "Schedule", icon: Calendar },
   { href: "/market", label: "Market Intel", icon: Globe },
   { href: "/github", label: "GitHub Progress", icon: GitBranch },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar() {

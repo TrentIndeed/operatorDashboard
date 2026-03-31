@@ -26,6 +26,7 @@ from api.leads import router as leads_router
 from api.google_auth import router as google_auth_router
 from api.social_sync import router as social_sync_router
 from api.billing import router as billing_router
+from api.settings import router as settings_router
 
 
 @asynccontextmanager
@@ -73,6 +74,7 @@ app.include_router(leads_router)
 app.include_router(google_auth_router)
 app.include_router(social_sync_router)
 app.include_router(billing_router)
+app.include_router(settings_router)
 
 
 # --- Background task wrappers (create their own DB sessions) ---
