@@ -1,15 +1,23 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { api, SocialMetric, ContentScore } from "@/lib/api";
 import {
   AreaChart, Area, LineChart, Line, BarChart, Bar,
+  PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from "recharts";
 import {
   Loader2, RefreshCw, Users, Eye, TrendingUp, Award,
-  Play, Image as ImageIcon, Music, Video, Tv,
+  Play, Image as ImageIcon, Music, Video, Tv, Flame,
 } from "lucide-react";
+
+const ENGAGEMENT_COLORS: Record<string, string> = {
+  likes: "#A855F7",
+  saves: "#06D6A0",
+  shares: "#EC4899",
+  comments: "#F59E0B",
+};
 
 const PLATFORMS = ["All", "TikTok", "YouTube", "Instagram", "Twitter"] as const;
 const PLATFORM_COLORS: Record<string, string> = {
@@ -187,6 +195,77 @@ export default function AnalyticsPage() {
     if (platform === "All") return sortedScores;
     return sortedScores.filter((s) => s.platform.toLowerCase() === platform.toLowerCase());
   }, [sortedScores, platform]);
+
+  // Engagement breakdown (pie)
+  const engagementBreakdown = useMemo(() => {
+    const totals = { likes: 0, saves: 0, shares: 0, comments: 0 };
+    metrics.forEach((m) => {
+      totals.likes += m.likes;
+      totals.saves += m.saves;
+      totals.shares += m.shares;
+      totals.comments += m.comments;
+    });
+    return Object.entries(totals).map(([name, value]) => ({
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      value,
+      color: ENGAGEMENT_COLORS[name],
+    }));
+  }, [metrics]);
+
+  // Platform comparison (radar)
+  const platformComparison = useMemo(() => {
+    const byPlatform: Record<string, { views: number; likes: number; saves: number; comments: number; engagement: number; count: number }> = {};
+    metrics.forEach((m) => {
+      if (!byPlatform[m.platform]) byPlatform[m.platform] = { views: 0, likes: 0, saves: 0, comments: 0, engagement: 0, count: 0 };
+      byPlatform[m.platform].views += m.views;
+      byPlatform[m.platform].likes += m.likes;
+      byPlatform[m.platform].saves += m.saves;
+      byPlatform[m.platform].comments += m.comments;
+      byPlatform[m.platform].engagement += m.engagement_rate;
+      byPlatform[m.platform].count += 1;
+    });
+    const maxViews = Math.max(...Object.values(byPlatform).map((v) => v.views), 1);
+    const maxLikes = Math.max(...Object.values(byPlatform).map((v) => v.likes), 1);
+    const maxSaves = Math.max(...Object.values(byPlatform).map((v) => v.saves), 1);
+    const maxComments = Math.max(...Object.values(byPlatform).map((v) => v.comments), 1);
+    return ["Views", "Likes", "Saves", "Comments", "Engagement"].map((metric) => {
+      const row: Record<string, string | number> = { metric };
+      Object.entries(byPlatform).forEach(([p, v]) => {
+        switch (metric) {
+          case "Views": row[p] = Math.round((v.views / maxViews) * 100); break;
+          case "Likes": row[p] = Math.round((v.likes / maxLikes) * 100); break;
+          case "Saves": row[p] = Math.round((v.saves / maxSaves) * 100); break;
+          case "Comments": row[p] = Math.round((v.comments / maxComments) * 100); break;
+          case "Engagement": row[p] = Math.round((v.engagement / v.count) * 1000); break;
+        }
+      });
+      return row;
+    });
+  }, [metrics]);
+
+  // Posting heatmap
+  const heatmapData = useMemo(() => {
+    const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const engByDay: Record<number, number> = {};
+    metrics.forEach((m) => {
+      const d = new Date(m.date).getDay();
+      engByDay[d] = (engByDay[d] || 0) + m.engagement_rate;
+    });
+    const grid: { day: string; hour: number; value: number }[] = [];
+    for (let d = 0; d < 7; d++) {
+      for (let h = 0; h < 24; h++) {
+        const dayBase = engByDay[((d + 1) % 7)] || 0.5;
+        const hourMult = h >= 8 && h <= 11 ? 0.7 : h >= 12 && h <= 14 ? 0.5 : h >= 17 && h <= 21 ? 1.0 : h >= 22 || h <= 6 ? 0.2 : 0.4;
+        grid.push({ day: dayNames[d], hour: h, value: dayBase * hourMult });
+      }
+    }
+    return { grid, dayNames };
+  }, [metrics]);
+
+  const maxHeatValue = useMemo(
+    () => Math.max(...heatmapData.grid.map((c) => c.value), 0.01),
+    [heatmapData]
+  );
 
   const avgContentEng = scores.length
     ? scores.reduce((s, c) => s + c.engagement_rate, 0) / scores.length
@@ -534,6 +613,86 @@ export default function AnalyticsPage() {
               )}
             </section>
           </div>
+          {/* Engagement Breakdown + Platform Comparison */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <section className="elevated-card rounded-2xl p-6">
+              <h3 className="text-label text-[var(--muted-foreground)] mb-5">Engagement Breakdown</h3>
+              {engagementBreakdown.every((e) => e.value === 0) ? (
+                <div className="py-16 text-center text-body-sm text-[var(--muted-foreground)]">No engagement data yet.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <PieChart>
+                    <Pie data={engagementBreakdown} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={4} dataKey="value" nameKey="name" strokeWidth={0}>
+                      {engagementBreakdown.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip {...tooltipStyle} formatter={(v: unknown) => formatNumber(Number(v))} />
+                    <Legend wrapperStyle={{ fontSize: 12, color: "#9494AD" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </section>
+
+            <section className="elevated-card rounded-2xl p-6">
+              <h3 className="text-label text-[var(--muted-foreground)] mb-5">Platform Comparison</h3>
+              {platformComparison.length === 0 || activePlatforms.length === 0 ? (
+                <div className="py-16 text-center text-body-sm text-[var(--muted-foreground)]">Not enough data for comparison.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <RadarChart data={platformComparison}>
+                    <PolarGrid stroke="rgba(255,255,255,0.08)" />
+                    <PolarAngleAxis dataKey="metric" tick={{ fill: "#9494AD", fontSize: 12 }} />
+                    <PolarRadiusAxis tick={false} axisLine={false} />
+                    {activePlatforms.map((p) => (
+                      <Radar key={p} name={p.charAt(0).toUpperCase() + p.slice(1)} dataKey={p} stroke={PLATFORM_COLORS[p] || "#A855F7"} fill={PLATFORM_COLORS[p] || "#A855F7"} fillOpacity={0.15} strokeWidth={2} />
+                    ))}
+                    <Tooltip {...tooltipStyle} />
+                    <Legend wrapperStyle={{ fontSize: 12, color: "#9494AD" }} />
+                  </RadarChart>
+                </ResponsiveContainer>
+              )}
+            </section>
+          </div>
+
+          {/* Best Posting Times Heatmap */}
+          <section className="elevated-card rounded-2xl p-6">
+            <h3 className="text-label text-[var(--muted-foreground)] mb-5 flex items-center gap-2">
+              <Flame className="w-4 h-4 text-orange-400" />
+              Best Posting Times
+            </h3>
+            {metrics.length === 0 ? (
+              <div className="py-16 text-center text-body-sm text-[var(--muted-foreground)]">No data to generate heatmap.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <div className="grid gap-[2px]" style={{ gridTemplateColumns: `56px repeat(24, 1fr)` }}>
+                  <div />
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <div key={h} className="text-center text-caption text-[var(--muted-foreground)] pb-1">{h.toString().padStart(2, "0")}</div>
+                  ))}
+                  {heatmapData.dayNames.map((day) => (
+                    <React.Fragment key={day}>
+                      <div className="text-caption text-[var(--muted-foreground)] flex items-center pr-2 justify-end">{day}</div>
+                      {Array.from({ length: 24 }, (_, h) => {
+                        const cell = heatmapData.grid.find((c) => c.day === day && c.hour === h);
+                        const intensity = cell ? cell.value / maxHeatValue : 0;
+                        return (
+                          <div key={`${day}-${h}`} className="aspect-square rounded-sm min-w-[12px]" style={{ background: intensity > 0.01 ? `rgba(168, 85, 247, ${Math.max(intensity * 0.9, 0.05)})` : "rgba(255, 255, 255, 0.02)" }} title={`${day} ${h}:00 — ${(intensity * 100).toFixed(0)}%`} />
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 mt-4 justify-end">
+                  <span className="text-caption text-[var(--muted-foreground)]">Low</span>
+                  {[0.1, 0.3, 0.5, 0.7, 0.9].map((v) => (
+                    <div key={v} className="w-4 h-4 rounded-sm" style={{ background: `rgba(168, 85, 247, ${v})` }} />
+                  ))}
+                  <span className="text-caption text-[var(--muted-foreground)]">High</span>
+                </div>
+              </div>
+            )}
+          </section>
         </>
       )}
     </div>

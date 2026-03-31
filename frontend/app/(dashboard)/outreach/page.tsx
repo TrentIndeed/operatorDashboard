@@ -247,7 +247,7 @@ export default function Page() {
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-heading text-white">Leads & Outreach</h1>
+          <h1 className="text-heading text-white">Outreach & Networking</h1>
           <p className="text-body text-[var(--muted-foreground)] mt-1">
             Detect, engage, and convert your audience
           </p>

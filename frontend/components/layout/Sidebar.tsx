@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   FileText,
   BarChart2,
-  TrendingUp,
   Users,
   Calendar,
   Globe,
@@ -22,13 +21,12 @@ import {
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Command Center", icon: LayoutDashboard },
+  { href: "/outreach", label: "Outreach", icon: Users },
   { href: "/content", label: "Content Studio", icon: FileText },
-  { href: "/analytics", label: "Analytics", icon: BarChart2 },
-  { href: "/stats", label: "Stats", icon: TrendingUp },
-  { href: "/leads", label: "Leads & Outreach", icon: Users },
   { href: "/schedule", label: "Schedule", icon: Calendar },
   { href: "/market", label: "Market Intel", icon: Globe },
-  { href: "/github", label: "GitHub Progress", icon: GitBranch },
+  { href: "/analytics", label: "Analytics", icon: BarChart2 },
+  { href: "/github", label: "GitHub", icon: GitBranch },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
