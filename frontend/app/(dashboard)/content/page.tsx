@@ -179,26 +179,26 @@ function DraftCard({
       )}
 
       {/* Actions */}
-      <div className="flex items-center gap-2 pt-2 border-t border-white/5 mt-auto">
+      <div className="flex items-center gap-2 pt-2 border-t border-white/5 mt-auto flex-wrap">
         {draft.status === "draft" && (
           <>
             <button
               onClick={() => onApprove(draft.id)}
-              className="btn-pill text-xs flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:brightness-110 transition"
+              className="btn-pill text-xs flex items-center gap-1 bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:brightness-110 transition"
             >
-              <Check className="w-3.5 h-3.5" /> Approve
+              <Check className="w-3 h-3" /> Approve
             </button>
             <button
               onClick={() => onDecline(draft.id)}
-              className="btn-pill btn-pill-outline text-xs flex items-center gap-1.5"
+              className="btn-pill btn-pill-outline text-xs flex items-center gap-1"
             >
-              <X className="w-3.5 h-3.5" /> Decline
+              <X className="w-3 h-3" /> Decline
             </button>
             <button
               onClick={() => setRemixOpen(!remixOpen)}
-              className="btn-pill text-xs flex items-center gap-1.5 border border-purple-500/40 text-purple-300 hover:bg-purple-500/10 transition"
+              className="btn-pill text-xs flex items-center gap-1 border border-purple-500/40 text-purple-300 hover:bg-purple-500/10 transition"
             >
-              <Shuffle className="w-3.5 h-3.5" /> Remix
+              <Shuffle className="w-3 h-3" /> Remix
             </button>
           </>
         )}

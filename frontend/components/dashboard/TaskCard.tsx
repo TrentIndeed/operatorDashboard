@@ -90,11 +90,11 @@ export function TaskCard({ task, onComplete }: TaskCardProps) {
           </p>
         )}
 
-        <div className="flex items-center gap-2.5 mt-3">
+        <div className="flex items-center gap-2 mt-3 flex-wrap">
           {task.project_tag && (
             <span
               className={cn(
-                "text-caption font-bold px-3 py-1 rounded-full text-white bg-gradient-to-r",
+                "text-caption font-bold px-2.5 py-0.5 rounded-full text-white bg-gradient-to-r truncate max-w-[140px]",
                 getTagGradient(task.project_tag)
               )}
             >
