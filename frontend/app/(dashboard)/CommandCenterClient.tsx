@@ -278,6 +278,20 @@ export function CommandCenterClient() {
         </button>
       </div>
 
+      {/* AI Generate — prominent CTA */}
+      <button
+        onClick={handleGenerateTasks}
+        disabled={generating}
+        className="w-full py-4 rounded-2xl font-bold text-lg text-white bg-gradient-to-r from-purple-600 via-pink-600 to-purple-600 hover:from-purple-500 hover:via-pink-500 hover:to-purple-500 disabled:opacity-50 transition-all shadow-[0_0_30px_rgba(168,85,247,0.2)] flex items-center justify-center gap-3"
+      >
+        {generating ? (
+          <Loader2 className="w-5 h-5 animate-spin" />
+        ) : (
+          <Brain className="w-5 h-5" />
+        )}
+        {generating ? "Generating..." : "AI Generate — Tasks, Content, Briefing, Market Intel"}
+      </button>
+
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-5">
         <StatCard
@@ -323,20 +337,6 @@ export function CommandCenterClient() {
             <SectionHeader
               title={`Priority Tasks (${tasks.length})`}
               glow
-              action={
-                <button
-                  onClick={handleGenerateTasks}
-                  disabled={generating}
-                  className="btn-pill btn-pill-primary flex items-center gap-2 disabled:opacity-50"
-                >
-                  {generating ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Brain className="w-4 h-4" />
-                  )}
-                  {generating ? "Generating..." : "AI Generate"}
-                </button>
-              }
             />
             <div className="space-y-3">
               <AnimatePresence initial={false}>
@@ -408,6 +408,11 @@ export function CommandCenterClient() {
         {/* RIGHT SIDEBAR */}
         <div className="space-y-8">
           <section>
+            <SectionHeader title="Today's Briefing" glow />
+            <BriefingPanel items={data.briefing} />
+          </section>
+
+          <section>
             <SectionHeader
               title="AI Suggestions"
               action={
@@ -415,11 +420,6 @@ export function CommandCenterClient() {
               }
             />
             <SuggestionsPanel suggestions={data.suggestions} />
-          </section>
-
-          <section>
-            <SectionHeader title="Today's Briefing" />
-            <BriefingPanel items={data.briefing} />
           </section>
         </div>
       </div>
