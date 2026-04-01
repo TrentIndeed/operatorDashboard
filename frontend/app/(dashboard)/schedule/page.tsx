@@ -551,9 +551,15 @@ export default function SchedulePage() {
             </div>
           )}
 
-          {/* Day cells — month: 7 cols, 2week: 5 cols (3 rows of ~5), week: 7 cols */}
+          {/* Day cells — responsive: 2 cols mobile, wider on desktop */}
           <div
-            className={`flex-1 grid ${viewMode === "month" ? "grid-cols-7" : viewMode === "2week" ? "grid-cols-5" : "grid-cols-7"}`}
+            className={`flex-1 grid ${
+              viewMode === "month"
+                ? "grid-cols-4 sm:grid-cols-7"
+                : viewMode === "2week"
+                  ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
+                  : "grid-cols-2 sm:grid-cols-4 lg:grid-cols-7"
+            }`}
             style={{ gridAutoRows: "1fr" }}
           >
             {visibleDays.map(({ date, inMonth }, idx) => {
@@ -568,12 +574,12 @@ export default function SchedulePage() {
               return (
                 <div
                   key={idx}
-                  className={`border border-white/[0.04] p-2 transition-colors ${
+                  className={`border border-white/[0.04] p-2 sm:p-2 transition-colors min-h-[80px] ${
                     isDayOff && inMonth ? "bg-red-500/[0.03]" : "hover:bg-white/[0.02]"
                   } ${isToday ? "border-purple-500/60" : ""} ${!inMonth ? "opacity-30" : ""}`}
                 >
                   <div
-                    className={`text-[12px] font-medium mb-1.5 flex items-center gap-1.5 ${
+                    className={`text-[13px] sm:text-[12px] font-semibold mb-1.5 flex items-center gap-1 ${
                       isToday
                         ? "text-purple-400"
                         : isDayOff
@@ -591,18 +597,18 @@ export default function SchedulePage() {
                       {date.getDate()}
                     </span>
                     {showDayName && (
-                      <span className="text-[11px]">
-                        {date.toLocaleDateString("en-US", { weekday: "short", month: "short" })}
+                      <span className="text-[12px] sm:text-[11px]">
+                        {date.toLocaleDateString("en-US", { weekday: "short" })}
                       </span>
                     )}
                     {/* Hours badge */}
                     {inMonth && !isDayOff && hoursAvail > 0 && (
-                      <span className="text-[9px] px-1 py-0 rounded bg-purple-500/15 text-purple-300 ml-auto">
+                      <span className="text-[10px] sm:text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 ml-auto font-bold">
                         {hoursAvail}h
                       </span>
                     )}
                     {inMonth && isDayOff && (
-                      <span className="text-[9px] px-1 py-0 rounded bg-red-500/15 text-red-400 ml-auto">
+                      <span className="text-[10px] sm:text-[9px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 ml-auto font-bold">
                         off
                       </span>
                     )}
