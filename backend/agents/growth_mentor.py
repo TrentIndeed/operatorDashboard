@@ -121,12 +121,15 @@ Wrap up the day with him. Be real about what happened — if he crushed it, hype
 
     try:
         result = _call_claude(prompt, FAST_MODEL)
-        # Strip quotes, markdown, JSON wrappers, debug output
-        msg = result.strip().strip('"').strip("'").strip("`")
+        # Aggressively clean the response
+        msg = result.strip()
+        # Remove "json" prefix that Claude sometimes adds
+        if msg.lower().startswith("json"):
+            msg = msg[4:].strip()
         # Remove markdown code fences
         if msg.startswith("```"):
             lines = msg.splitlines()
-            msg = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+            msg = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:]).strip()
         # If Claude returned JSON, extract the message field
         if msg.startswith("{"):
             try:
@@ -135,8 +138,11 @@ Wrap up the day with him. Be real about what happened — if he crushed it, hype
                 msg = parsed.get("message") or parsed.get("text") or parsed.get("body") or msg
             except (json.JSONDecodeError, TypeError):
                 pass
-        # Strip any remaining quotes
-        msg = msg.strip().strip('"').strip("'")
+        # Strip all quote types
+        msg = msg.strip().strip('"').strip("'").strip("`").strip()
+        # Remove leading/trailing quotes that might remain
+        if msg.startswith('"') and msg.endswith('"'):
+            msg = msg[1:-1]
         # Truncate
         if len(msg) > 500:
             msg = msg[:497] + "..."
