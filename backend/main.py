@@ -759,9 +759,9 @@ def send_mentor_message(body: dict, db: Session = Depends(get_db)):
     twilio_sid = os.getenv("TWILIO_SID")
     twilio_token = os.getenv("TWILIO_TOKEN")
     twilio_to = os.getenv("TWILIO_TO")
-    twilio_msid = os.getenv("TWILIO_MESSAGING_SID")
+    twilio_from = os.getenv("TWILIO_PHONE")
 
-    if not all([twilio_sid, twilio_token, twilio_to, twilio_msid]):
+    if not all([twilio_sid, twilio_token, twilio_to, twilio_from]):
         return {"status": "ok", "message": msg, "sent": False, "reason": "Twilio not configured"}
 
     import httpx
@@ -770,7 +770,7 @@ def send_mentor_message(body: dict, db: Session = Depends(get_db)):
             f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json",
             data={
                 "To": twilio_to,
-                "MessagingServiceSid": twilio_msid,
+                "From": twilio_from,
                 "Body": msg,
             },
             auth=(twilio_sid, twilio_token),

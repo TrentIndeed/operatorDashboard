@@ -23,13 +23,13 @@ def _send_sms(body: str):
     sid = os.getenv("TWILIO_SID")
     token = os.getenv("TWILIO_TOKEN")
     to = os.getenv("TWILIO_TO")
-    msid = os.getenv("TWILIO_MESSAGING_SID")
-    if not all([sid, token, to, msid]):
+    from_num = os.getenv("TWILIO_PHONE")
+    if not all([sid, token, to, from_num]):
         return
 
     httpx.post(
         f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
-        data={"To": to, "MessagingServiceSid": msid, "Body": body[:1600]},
+        data={"To": to, "From": from_num, "Body": body[:1600]},
         auth=(sid, token),
         timeout=15,
     )
