@@ -702,6 +702,82 @@ Return ONLY this JSON format:
         raise HTTPException(status_code=500, detail=f"Failed to parse: {e}")
 
 
+# --- Growth Mentor SMS ---
+
+@app.post("/mentor/send")
+def send_mentor_message(body: dict, db: Session = Depends(get_db)):
+    """Send a growth mentor SMS. Type: morning | midday | afternoon | evening"""
+    _check_ai_endpoint_limit()
+
+    message_type = body.get("type", "morning")
+    if message_type not in ("morning", "midday", "afternoon", "evening"):
+        raise HTTPException(status_code=400, detail="Type must be: morning, midday, afternoon, evening")
+
+    from agents.growth_mentor import generate_mentor_message
+    import json as _json
+    from db.database import User
+
+    # Get current state
+    tasks = db.query(Task).filter(Task.status == "pending").order_by(Task.priority_score.desc()).all()
+    goals = db.query(Goal).filter(Goal.status == "active").all()
+    projects = db.query(Project).all()
+    completed = db.query(Task).filter(Task.status == "done").count()
+
+    # Get available hours
+    user = db.query(User).first()
+    day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    today_day = day_names[datetime.utcnow().weekday()]
+    available_hours = 2
+    if user and user.weekly_hours:
+        try:
+            schedule = _json.loads(user.weekly_hours)
+            available_hours = schedule.get(today_day, 2)
+        except:
+            pass
+
+    # Skip if day off
+    if available_hours == 0 and message_type != "evening":
+        return {"status": "skipped", "message": "Day off — no mentor messages"}
+
+    # Generate message
+    msg = generate_mentor_message(
+        message_type=message_type,
+        tasks=[{"title": t.title, "estimated_minutes": t.estimated_minutes, "priority_score": t.priority_score, "project_tag": t.project_tag} for t in tasks],
+        goals=[{"title": g.title, "progress": g.progress} for g in goals],
+        projects=[{"name": p.name, "stage_label": p.stage_label} for p in projects],
+        completed_today=completed,
+        available_hours=available_hours,
+    )
+
+    # Send via Twilio
+    twilio_sid = os.getenv("TWILIO_SID")
+    twilio_token = os.getenv("TWILIO_TOKEN")
+    twilio_to = os.getenv("TWILIO_TO")
+    twilio_msid = os.getenv("TWILIO_MESSAGING_SID")
+
+    if not all([twilio_sid, twilio_token, twilio_to, twilio_msid]):
+        return {"status": "ok", "message": msg, "sent": False, "reason": "Twilio not configured"}
+
+    import httpx
+    try:
+        resp = httpx.post(
+            f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json",
+            data={
+                "To": twilio_to,
+                "MessagingServiceSid": twilio_msid,
+                "Body": msg,
+            },
+            auth=(twilio_sid, twilio_token),
+            timeout=15,
+        )
+        sent = resp.status_code == 201
+        print(f"[Mentor] {message_type} SMS {'sent' if sent else 'failed'}: {msg[:80]}")
+        return {"status": "ok", "message": msg, "sent": sent, "type": message_type}
+    except Exception as e:
+        print(f"[Mentor] SMS failed: {e}")
+        return {"status": "ok", "message": msg, "sent": False, "reason": str(e)}
+
+
 @app.get("/health")
 def health():
     # Check Claude auth status file if it exists
