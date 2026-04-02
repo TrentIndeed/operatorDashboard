@@ -128,11 +128,25 @@ Return ONLY the message text, no quotes or JSON.""",
 
     try:
         result = _call_claude(prompt, FAST_MODEL)
-        # Strip any quotes or markdown
+        # Strip quotes, markdown, JSON wrappers, debug output
         msg = result.strip().strip('"').strip("'").strip("`")
-        # Truncate to SMS-friendly length
-        if len(msg) > 320:
-            msg = msg[:317] + "..."
+        # Remove markdown code fences
+        if msg.startswith("```"):
+            lines = msg.splitlines()
+            msg = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+        # If Claude returned JSON, extract the message field
+        if msg.startswith("{"):
+            try:
+                import json
+                parsed = json.loads(msg)
+                msg = parsed.get("message") or parsed.get("text") or parsed.get("body") or msg
+            except (json.JSONDecodeError, TypeError):
+                pass
+        # Strip any remaining quotes
+        msg = msg.strip().strip('"').strip("'")
+        # Truncate
+        if len(msg) > 500:
+            msg = msg[:497] + "..."
         return msg
     except Exception as e:
         # Fallback messages if Claude fails
