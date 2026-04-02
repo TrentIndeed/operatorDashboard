@@ -28,6 +28,7 @@ from api.social_sync import router as social_sync_router
 from api.billing import router as billing_router
 from api.settings import router as settings_router
 from api.sms_webhook import router as sms_router
+from api.support_chat import router as support_router
 
 
 @asynccontextmanager
@@ -77,6 +78,7 @@ app.include_router(social_sync_router)
 app.include_router(billing_router)
 app.include_router(settings_router)
 app.include_router(sms_router)
+app.include_router(support_router)
 
 
 # --- Background task wrappers (create their own DB sessions) ---
