@@ -726,7 +726,11 @@ def send_mentor_message(body: dict, db: Session = Depends(get_db)):
     # Get available hours
     user = db.query(User).first()
     day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-    today_day = day_names[datetime.utcnow().weekday()]
+    # Use Eastern time for schedule (UTC-4 or UTC-5)
+    from datetime import timezone
+    eastern_offset = timedelta(hours=-4)  # EDT
+    now_eastern = datetime.now(timezone.utc) + eastern_offset
+    today_day = day_names[now_eastern.weekday()]
     available_hours = 2
     if user and user.weekly_hours:
         try:
