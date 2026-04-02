@@ -12,6 +12,18 @@ Message types:
 """
 from agents.reasoning import reason_json, _call_claude, FAST_MODEL
 
+# Style rules prepended to every mentor prompt
+STYLE_RULES = """
+CRITICAL STYLE RULES:
+- Write like a normal person texting. Short sentences. No em dashes (—). Use periods or just start a new sentence.
+- NEVER use fancy punctuation like em dashes, semicolons, or ellipsis (...). Just use periods and commas.
+- Don't say things no real person would text. No "game-changer", "massive upside", "leverage", "compound", etc.
+- Sound like a 25 year old friend texting, not a LinkedIn post.
+- Use "you" not "the founder". This is a 1-on-1 text.
+- Keep it under 200 characters if possible. Nobody reads long texts.
+- Only reference tasks and platforms the user ACTUALLY has. Don't make up tasks or suggest platforms they don't use.
+"""
+
 
 def generate_mentor_message(
     message_type: str,
@@ -104,7 +116,7 @@ Wrap up the day with him. Be real about what happened — if he crushed it, hype
 2-3 sentences max. Return ONLY the text message, nothing else.""",
     }
 
-    prompt = prompts.get(message_type, prompts["morning"])
+    prompt = STYLE_RULES + "\n" + prompts.get(message_type, prompts["morning"])
 
     try:
         result = _call_claude(prompt, FAST_MODEL)
