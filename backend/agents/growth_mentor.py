@@ -15,13 +15,14 @@ from agents.reasoning import reason_json, _call_claude, FAST_MODEL
 # Style rules prepended to every mentor prompt
 STYLE_RULES = """
 CRITICAL STYLE RULES:
-- Write like a normal person texting. Short sentences. No em dashes (—). Use periods or just start a new sentence.
-- NEVER use fancy punctuation like em dashes, semicolons, or ellipsis (...). Just use periods and commas.
-- Don't say things no real person would text. No "game-changer", "massive upside", "leverage", "compound", etc.
-- Sound like a 25 year old friend texting, not a LinkedIn post.
-- Use "you" not "the founder". This is a 1-on-1 text.
-- Keep it under 200 characters if possible. Nobody reads long texts.
-- Only reference tasks and platforms the user ACTUALLY has. Don't make up tasks or suggest platforms they don't use.
+- Text like a real gen z friend. Use slang naturally like "ngl", "lowkey", "fr", "no cap", "bet", "its giving", "slay" etc. Don't overdo it, just sprinkle it in.
+- Short sentences. No em dashes. No semicolons. No ellipsis. Just periods and commas.
+- NEVER use corporate words like "game-changer", "massive upside", "leverage", "compound", "needle-mover".
+- Sound like a 22 year old texting their friend, not a motivational speaker or LinkedIn poster.
+- Give actual useful advice and updates. Mention specific numbers from their goals and progress.
+- Keep it 2-4 sentences. Not too short, not a paragraph.
+- Only reference tasks and platforms they ACTUALLY have. Don't invent tasks.
+- Be honest. If they did nothing, say it. Don't sugarcoat but don't be mean.
 """
 
 

@@ -82,39 +82,79 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
             _send_telegram("*Tasks:*\n" + "\n".join(lines), chat_id)
         return JSONResponse({"ok": True})
 
-    # Anything else: conversational growth mentor reply
+    # Check if they're reporting progress (e.g. "I posted on reddit", "filmed a tiktok", "did outreach")
     try:
-        from agents.reasoning import _call_claude, FAST_MODEL
+        from agents.reasoning import _call_claude, reason_json, FAST_MODEL
 
         tasks = db.query(Task).filter(Task.status == "pending").order_by(Task.priority_score.desc()).all()
         goals = db.query(Goal).filter(Goal.status == "active").all()
 
-        task_list = "\n".join(f"- {t.title}" for t in tasks[:5]) or "No tasks"
-        goal_list = "\n".join(f"- {g.title} ({int(g.progress * 100)}%)" for g in goals[:3]) or "No goals"
+        task_list = "\n".join(f"- [{i+1}] {t.title}" for i, t in enumerate(tasks[:7])) or "No tasks"
+        goal_list = "\n".join(f"- {g.title} ({int(g.progress * 100)}%)" for g in goals[:5]) or "No goals"
 
-        prompt = f"""You are a personal business growth mentor having a text conversation with a solo founder.
+        # First: check if they're reporting they did something
+        check_prompt = f"""The user texted: "{text}"
 
-Their current tasks:
+Their pending tasks:
 {task_list}
 
 Their goals:
 {goal_list}
 
-They just texted you: "{text}"
+Is the user reporting that they completed or made progress on a task or goal?
+Return JSON: {{"action": "complete_task", "task_number": N}} or {{"action": "update_goal", "goal_title": "...", "new_progress": 0.X}} or {{"action": "chat"}}
+If they're just chatting or asking questions, return {{"action": "chat"}}."""
 
-Reply like a supportive but direct friend/coach. Keep it SHORT (2-3 sentences, under 280 chars).
-Be specific to their actual tasks and goals — don't be generic.
-If they're asking for advice, give ONE concrete action.
-If they're venting, acknowledge then redirect to action.
+        try:
+            action = reason_json(check_prompt)
+            if isinstance(action, dict):
+                if action.get("action") == "complete_task" and action.get("task_number"):
+                    num = int(action["task_number"])
+                    if 1 <= num <= len(tasks):
+                        task = tasks[num - 1]
+                        task.status = "done"
+                        db.commit()
+                        _send_telegram(f"nice, marked done: {task.title}", chat_id)
+                        return JSONResponse({"ok": True})
+
+                elif action.get("action") == "update_goal" and action.get("goal_title"):
+                    for g in goals:
+                        if action["goal_title"].lower() in g.title.lower():
+                            g.progress = min(1.0, float(action.get("new_progress", g.progress + 0.1)))
+                            db.commit()
+                            _send_telegram(f"updated {g.title} to {int(g.progress * 100)}%", chat_id)
+                            return JSONResponse({"ok": True})
+        except Exception:
+            pass
+
+        # Regular conversation
+        prompt = f"""You're texting your friend who's a solo founder. You're their growth advisor.
+
+Their tasks:
+{task_list}
+
+Their goals:
+{goal_list}
+
+They texted: "{text}"
+
+STYLE: Text like a gen z friend. Use slang naturally (ngl, lowkey, fr, bet). No em dashes. No corporate speak. Be real and give actual advice. 2-3 sentences.
 
 Return ONLY the reply text."""
 
         reply = _call_claude(prompt, FAST_MODEL)
         reply = reply.strip().strip('"').strip("'").strip("`")
+        if reply.startswith("{"):
+            try:
+                import json
+                parsed = json.loads(reply)
+                reply = parsed.get("message") or parsed.get("text") or reply
+            except:
+                pass
         if len(reply) > 500:
             reply = reply[:497] + "..."
         _send_telegram(reply, chat_id)
     except Exception:
-        _send_telegram("Got it! Check the dashboard for your full task list.", chat_id)
+        _send_telegram("bet, check the dashboard for your full task list", chat_id)
 
     return JSONResponse({"ok": True})

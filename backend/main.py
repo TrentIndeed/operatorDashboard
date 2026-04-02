@@ -741,9 +741,7 @@ def send_mentor_message(body: dict, db: Session = Depends(get_db)):
         except:
             pass
 
-    # Skip if day off
-    if available_hours == 0 and message_type != "evening":
-        return {"status": "skipped", "message": "Day off — no mentor messages"}
+    # Always send — even on off days, the mentor checks in
 
     # Generate message
     msg = generate_mentor_message(
