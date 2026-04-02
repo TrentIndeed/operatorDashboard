@@ -756,31 +756,25 @@ def send_mentor_message(body: dict, db: Session = Depends(get_db)):
     )
 
     # Send via Twilio
-    twilio_sid = os.getenv("TWILIO_SID")
-    twilio_token = os.getenv("TWILIO_TOKEN")
-    twilio_to = os.getenv("TWILIO_TO")
-    twilio_from = os.getenv("TWILIO_PHONE")
+    # Send via Telegram
+    tg_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    tg_chat = os.getenv("TELEGRAM_CHAT_ID")
 
-    if not all([twilio_sid, twilio_token, twilio_to, twilio_from]):
-        return {"status": "ok", "message": msg, "sent": False, "reason": "Twilio not configured"}
+    if not tg_token or not tg_chat:
+        return {"status": "ok", "message": msg, "sent": False, "reason": "Telegram not configured"}
 
     import httpx
     try:
         resp = httpx.post(
-            f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json",
-            data={
-                "To": twilio_to,
-                "From": twilio_from,
-                "Body": msg,
-            },
-            auth=(twilio_sid, twilio_token),
+            f"https://api.telegram.org/bot{tg_token}/sendMessage",
+            json={"chat_id": tg_chat, "text": msg},
             timeout=15,
         )
-        sent = resp.status_code == 201
-        print(f"[Mentor] {message_type} SMS {'sent' if sent else 'failed'}: {msg[:80]}")
+        sent = resp.json().get("ok", False)
+        print(f"[Mentor] {message_type} Telegram {'sent' if sent else 'failed'}: {msg[:80]}")
         return {"status": "ok", "message": msg, "sent": sent, "type": message_type}
     except Exception as e:
-        print(f"[Mentor] SMS failed: {e}")
+        print(f"[Mentor] Telegram failed: {e}")
         return {"status": "ok", "message": msg, "sent": False, "reason": str(e)}
 
 
