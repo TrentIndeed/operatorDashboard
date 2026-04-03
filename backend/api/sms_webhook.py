@@ -144,6 +144,9 @@ Return ONLY the reply text."""
 
         reply = _call_claude(prompt, FAST_MODEL)
         reply = reply.strip().strip('"').strip("'").strip("`")
+        # Remove json prefix
+        if reply.lower().startswith("json"):
+            reply = reply[4:].strip()
         if reply.startswith("{"):
             try:
                 import json
@@ -151,10 +154,14 @@ Return ONLY the reply text."""
                 reply = parsed.get("message") or parsed.get("text") or reply
             except:
                 pass
+        reply = reply.strip().strip('"').strip("'")
+        # Catch auth errors
+        if "authenticate" in reply.lower() or "401" in reply or "API Error" in reply:
+            raise RuntimeError("Auth error")
         if len(reply) > 500:
             reply = reply[:497] + "..."
         _send_telegram(reply, chat_id)
     except Exception:
-        _send_telegram("bet, check the dashboard for your full task list", chat_id)
+        _send_telegram("yo im having a brain fart rn, try again in a bit or check the dashboard", chat_id)
 
     return JSONResponse({"ok": True})

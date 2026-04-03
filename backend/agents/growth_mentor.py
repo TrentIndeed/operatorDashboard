@@ -144,6 +144,9 @@ Wrap up the day with him. Be real about what happened — if he crushed it, hype
         # Remove leading/trailing quotes that might remain
         if msg.startswith('"') and msg.endswith('"'):
             msg = msg[1:-1]
+        # Catch auth errors leaking into messages
+        if "authenticate" in msg.lower() or "401" in msg or "API Error" in msg:
+            raise RuntimeError("Auth error in response")
         # Truncate
         if len(msg) > 500:
             msg = msg[:497] + "..."
