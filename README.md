@@ -558,6 +558,136 @@ AI prompts are tuned for business growth, not just development:
 - **Briefing**: Growth opportunities, platform changes, competitor moves
 - **Content**: Build-in-public, tutorials, customer demos — not technical deep-dives
 
+## Telegram Bot (Growth Mentor)
+
+A personal AI growth mentor that texts you 3x/day on Telegram with contextual advice based on your actual tasks and goals.
+
+### Setup
+
+1. Open **Telegram** → search for **@BotFather** → send `/newbot`
+2. Name it (e.g. "Operator Dashboard") and pick a username
+3. Copy the **API token** BotFather gives you
+4. Open your new bot in Telegram and send it "hi" (so it registers your chat ID)
+5. Get your chat ID — the backend logs it, or check: `https://api.telegram.org/bot<TOKEN>/getUpdates`
+6. Add to your `.env` (or VPS `.env`):
+   ```env
+   TELEGRAM_BOT_TOKEN=your_bot_token
+   TELEGRAM_CHAT_ID=your_chat_id
+   ```
+7. Restart the backend
+8. Set up the Telegram webhook:
+   ```
+   curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://api.yourdomain.com/sms/webhook"
+   ```
+9. Set up cron jobs for daily messages (on VPS):
+   ```bash
+   # Create the mentor script
+   cat > /opt/mentor-cron.sh << 'EOF'
+   #!/bin/bash
+   TYPE=$1
+   curl -s -X POST http://localhost:8000/mentor/send \
+     -H 'Content-Type: application/json' \
+     -d "{\"type\": \"$TYPE\"}" > /dev/null 2>&1
+   EOF
+   chmod +x /opt/mentor-cron.sh
+
+   # Add cron jobs (times in UTC — adjust for your timezone)
+   # Eastern: 7am=11UTC, 1pm=17UTC, 9pm=01UTC
+   crontab -e
+   0 11 * * * /opt/mentor-cron.sh morning
+   0 17 * * * /opt/mentor-cron.sh midday
+   0 1 * * * /opt/mentor-cron.sh evening
+   ```
+
+### How It Works
+
+The bot sends 3 messages daily:
+- **Morning (7am)**: Top priorities, what to do first
+- **Midday (1pm)**: Progress check-in, outreach reminder
+- **Evening (9pm)**: Day recap, what to think about for tomorrow
+
+Messages are AI-generated based on your actual task list, goals, and progress — not canned text.
+
+### Replying to the Bot
+
+You can text the bot back:
+
+| You type | What happens |
+|----------|-------------|
+| `done 1` | Marks task #1 as complete |
+| `done 2` | Marks task #2 as complete |
+| `add Build landing page` | Creates a new task |
+| `tasks` | Lists all pending tasks |
+| Anything else | Claude responds as your growth mentor with personalized advice |
+
+The bot reads your current tasks and goals and responds contextually. It can also update your goal progress if you tell it what you accomplished.
+
+## Twilio SMS (Optional Alternative to Telegram)
+
+If you prefer SMS over Telegram. Requires A2P 10DLC registration (takes 1-7 business days).
+
+### Setup
+
+1. Sign up at **https://www.twilio.com/try-twilio**
+2. Buy a **local** phone number (not toll-free) — ~$1.15/mo
+3. Register for A2P 10DLC:
+   - **Messaging → Regulatory Compliance → Brands**: Register your brand ($4 one-time)
+   - **Campaigns**: Create a campaign ($15 one-time)
+     - Campaign description: "Personal productivity notifications. This app sends the account owner daily task reminders, goal updates, and business growth tips."
+     - Sample messages: Use examples of actual mentor messages
+     - Privacy Policy URL: `https://yourdomain.com/privacy`
+     - Terms URL: `https://yourdomain.com/terms`
+     - Opt-in description: "The account owner manually configures their own phone number in the application settings. Only the account holder receives messages."
+   - Wait for approval (1-7 business days)
+4. Add to `.env`:
+   ```env
+   TWILIO_SID=ACxxxxxxxxxx
+   TWILIO_TOKEN=your_auth_token
+   TWILIO_PHONE=+1your_twilio_number
+   TWILIO_TO=+1your_personal_number
+   ```
+5. The backend supports both Telegram and Twilio — Telegram is used by default if configured.
+
+## Claude Credential Auto-Refresh
+
+Claude CLI OAuth tokens expire every ~12-24 hours. On the VPS, a Windows scheduled task on your PC pushes fresh credentials every 6 hours:
+
+- Script: `scripts/auto-refresh-creds.bat`
+- Scheduled task: "RefreshClaudeCreds" (runs every 6h when PC is on)
+- Manual refresh: `bash scripts/refresh-vps-creds.sh`
+- Health check cron on VPS at 6am detects auth failures before the 7am n8n run
+- If auth expires overnight (PC off), the mentor bot shows a friendly fallback instead of error messages
+
+To set up the auto-refresh on a new machine:
+```powershell
+# Create scheduled task (PowerShell)
+$action = New-ScheduledTaskAction -Execute 'scripts\auto-refresh-creds.bat'
+$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Hours 6) -RepetitionDuration (New-TimeSpan -Days 365)
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+Register-ScheduledTask -TaskName 'RefreshClaudeCreds' -Action $action -Trigger $trigger -Settings $settings -Force
+```
+
+## Instagram Graph API (Optional)
+
+1. Create a **Meta Developer App** at https://developers.facebook.com/
+2. Add **Instagram Graph API** product
+3. Your Instagram must be a **Business account** (not personal) linked to a **Facebook Page**
+4. Go to **App Review → Permissions and Features** and request:
+   - `instagram_basic`
+   - `instagram_manage_insights`
+   - `pages_show_list`
+   - `pages_read_engagement`
+5. Generate access token via **Tools → Graph API Explorer**
+6. Extend to long-lived token (60 days):
+   ```
+   https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=APP_ID&client_secret=APP_SECRET&fb_exchange_token=SHORT_TOKEN
+   ```
+7. Add to `.env`:
+   ```env
+   INSTAGRAM_ACCESS_TOKEN=your_long_lived_token
+   INSTAGRAM_BUSINESS_ID=your_ig_business_id
+   ```
+
 ## Troubleshooting
 
 **"Claude CLI not found"**
