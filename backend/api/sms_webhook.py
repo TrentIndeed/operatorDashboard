@@ -72,6 +72,42 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
         _send_telegram(f"Added: {title}", chat_id)
         return JSONResponse({"ok": True})
 
+    # Command: note [text] — persistent context for the mentor
+    from db.database import User
+    note_match = re.match(r"^(?:note|remember|update|context|status)[:\s]+(.+)", lower, re.IGNORECASE)
+    if note_match:
+        note_text = text[note_match.start(1):]  # Use original case
+        user = db.query(User).first()
+        if user:
+            existing = user.mentor_notes or ""
+            # Keep last 5 notes max
+            notes = [n.strip() for n in existing.split("\n") if n.strip()]
+            notes.append(note_text.strip())
+            notes = notes[-5:]
+            user.mentor_notes = "\n".join(notes)
+            db.commit()
+            _send_telegram(f"got it, i'll remember that", chat_id)
+        return JSONResponse({"ok": True})
+
+    # Command: clear notes
+    if lower in ("clear notes", "forget", "reset notes"):
+        user = db.query(User).first()
+        if user:
+            user.mentor_notes = ""
+            db.commit()
+            _send_telegram("cleared all notes, fresh start", chat_id)
+        return JSONResponse({"ok": True})
+
+    # Command: notes — show current notes
+    if lower in ("notes", "my notes", "what do you remember"):
+        user = db.query(User).first()
+        notes = (user.mentor_notes or "").strip() if user else ""
+        if notes:
+            _send_telegram(f"here's what i remember:\n\n{notes}", chat_id)
+        else:
+            _send_telegram("no notes saved. text me 'note: [something]' and i'll remember it", chat_id)
+        return JSONResponse({"ok": True})
+
     # Command: tasks
     if lower in ("tasks", "status", "list"):
         tasks = db.query(Task).filter(Task.status == "pending").order_by(Task.priority_score.desc()).all()
@@ -144,6 +180,11 @@ If they're just chatting or asking questions, return {{"action": "chat"}}."""
                 except:
                     pass
 
+        # Get mentor notes for context
+        user = db.query(User).first()
+        mentor_notes = (user.mentor_notes or "").strip() if user else ""
+        notes_section = f"\n\nIMPORTANT context they told you to remember:\n{mentor_notes}" if mentor_notes else ""
+
         # Regular conversation
         prompt = f"""You're texting your friend who's a solo founder. You're their growth advisor. You know what they've been working on.
 
@@ -157,6 +198,7 @@ What they accomplished today:
 {completed_list}
 
 Their code activity today:{commit_list or ' No commits today'}
+{notes_section}
 
 They texted: "{text}"
 

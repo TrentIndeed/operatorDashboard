@@ -36,6 +36,7 @@ def generate_mentor_message(
     available_hours: float = 2,
     completed_tasks: list[dict] = None,
     recent_commits: list[dict] = None,
+    mentor_notes: str = "",
 ) -> str:
     """
     Generate a personalized growth mentor SMS message.
@@ -80,6 +81,10 @@ def generate_mentor_message(
             f"- {c.get('repo', '')}: {c.get('message', '')}" for c in recent_commits[:5]
         )
 
+    notes_section = ""
+    if mentor_notes:
+        notes_section = f"\n\nIMPORTANT things they told you to remember (respect these, don't contradict them):\n{mentor_notes}"
+
     prompts = {
         "morning": f"""You're texting your boy who's a solo founder. You're his growth advisor and close friend. It's 7am.
 
@@ -88,7 +93,7 @@ His tasks today:
 
 Goals:
 {goal_summary}
-{completed_summary}{commits_summary}
+{completed_summary}{commits_summary}{notes_section}
 
 Available hours: {available_hours}h
 
@@ -100,7 +105,7 @@ Text him like you're his best friend who happens to be a killer business advisor
 
 His tasks today:
 {task_summary}
-{completed_summary}{commits_summary}
+{completed_summary}{commits_summary}{notes_section}
 
 Completed so far: {completed_today}
 
@@ -112,7 +117,7 @@ Check in on him. Has he done the important stuff? If he made progress (completed
 
 His tasks today:
 {task_summary}
-{completed_summary}{commits_summary}
+{completed_summary}{commits_summary}{notes_section}
 
 Completed so far: {completed_today}
 Projects:
@@ -126,7 +131,7 @@ The day's almost over. If he's been coding (check commits), acknowledge that but
 
 His tasks today:
 {task_summary}
-{completed_summary}{commits_summary}
+{completed_summary}{commits_summary}{notes_section}
 
 Completed today: {completed_today}
 Total tasks: {len(tasks)}

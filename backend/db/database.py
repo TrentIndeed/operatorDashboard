@@ -275,6 +275,8 @@ class User(Base):
     instance_domain = Column(String)
     # Weekly availability: JSON string like {"mon":2,"tue":2,"wed":2,"thu":0,"fri":5,"sat":5,"sun":5}
     weekly_hours = Column(String, default='{"mon":2,"tue":2,"wed":2,"thu":2,"fri":2,"sat":0,"sun":0}')
+    # Persistent notes the mentor remembers (user texts "note: ..." to add)
+    mentor_notes = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

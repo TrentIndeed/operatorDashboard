@@ -772,6 +772,7 @@ def send_mentor_message(body: dict, db: Session = Depends(get_db)):
         available_hours=available_hours,
         completed_tasks=[{"title": t.title} for t in completed_tasks_today],
         recent_commits=recent_commits,
+        mentor_notes=user.mentor_notes or "" if user else "",
     )
 
     # Send via Twilio
