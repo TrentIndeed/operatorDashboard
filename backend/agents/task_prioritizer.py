@@ -11,45 +11,53 @@ from agents.reasoning import reason_json, FAST_MODEL
 from db.database import Task, Project, Goal, AISuggestion, User
 
 
-PRIORITIZE_PROMPT = """Generate today's top 5 tasks for a solo founder focused on GROWING their business. The mix should be:
+PRIORITIZE_PROMPT = """Generate today's top tasks for a solo founder executing a 4-week marketing plan for ParameshAI (mesh-to-parametric CAD for Onshape). The mix should be:
 
-- 2-3 GROWTH tasks (outreach, networking, content, community engagement)
-- 1-2 PRODUCT tasks (only if there's a critical blocker or shipping deadline)
+- 2-3 DISTRIBUTION tasks (content creation, community engagement, outreach, launches)
+- 1 PRODUCT task (only if there's a critical blocker for the marketing plan)
 - 0-1 ADMIN tasks (only if absolutely necessary)
 
-GROWTH task examples (be specific, not generic):
-- "Reply to 10 comments on Reddit r/[relevant subreddit] about [topic]"
-- "Film a 60-second TikTok showing [specific demo/result]"
-- "DM 5 people on Twitter who posted about [topic] this week"
-- "Post a build-in-public update thread on Twitter with screenshots"
-- "Join 2 Discord servers in [niche] and introduce yourself with value"
-- "Write a HackerNews Show HN post about [project]"
-- "Comment on 5 YouTube videos in [niche] with genuine insights"
-- "Create an Instagram carousel: '5 things I learned building [X]'"
-- "Cold email 3 potential beta users found on [platform]"
-- "Record a YouTube tutorial: 'How to [solve specific problem]'"
-- "Post in 3 IndieHackers/Reddit threads with helpful answers (soft CTA)"
-- "Reply to every comment on your last TikTok/YouTube video"
-- "Send a LinkedIn post about your latest milestone"
+DAILY NON-NEGOTIABLES (include at least 2 of these every day):
+- "Post 1 LinkedIn update about ParameshAI" (problem awareness, build journey, demo, or technical insight)
+- "Spend 30 min in r/onshape, r/cad, r/3Dprinting answering questions (no self-promo, just be helpful)"
+- "DM 5 people who posted about mesh/STL/Onshape problems on LinkedIn or Reddit"
+- "Post 2-3 tweets on X about mesh-to-parametric workflows or build progress"
+
+WEEKLY CONTENT (spread across the week):
+- Record 1 screen-capture demo of a mesh-to-parametric conversion (15-30 sec short-form)
+- Write 1 technical blog post (mesh workflows, reverse engineering, Onshape tips)
+- Film 1 YouTube Short showing before/after of a mesh conversion
+- Create 1 comparison post: manual rebuild vs ParameshAI
+
+SPECIFIC HIGH-IMPACT TASKS (suggest when relevant):
+- "Record a 'mesh to parametric in 30 seconds' demo using [specific part: gear, bracket, enclosure]"
+- "Write LinkedIn post: 'Backflip raised $30M for scan-to-CAD. Here's why I think the real gap is...' "
+- "Find and answer 3 Onshape Forum threads about mesh import or reverse engineering"
+- "DM 5 Onshape ambassadors/power users introducing ParameshAI early access"
+- "Write technical X thread: 'How surface segmentation works in mesh-to-parametric conversion'"
+- "Screen-record converting a Thingiverse STL to parametric Onshape, post as YouTube Short"
+- "Draft the Show HN post for ParameshAI (honest, technical, focused on the engineering problem)"
+- "Prepare Product Hunt ship page: screenshots, GIF demo, tagline"
+- "Send waitlist update email: 'Here's what we've built' with demo video link"
 
 Each task must:
-- Have a SPECIFIC, actionable title (not vague like "do outreach")
-- Explain WHY it matters for growth (tie to audience, clients, or revenue)
+- Have a SPECIFIC, actionable title (not vague)
+- Explain WHY it matters for the marketing plan
 - Have a realistic time estimate
 - Be tagged to the right project using slugs from context
 
 Scoring guide (priority_score 0-10):
-- 9-10: Revenue-generating or time-sensitive growth opportunity
-- 7-8: High-audience-growth impact (content that could go viral, community with hot discussion)
-- 5-6: Steady growth (regular posting, routine engagement)
-- 3-4: Product work (development, bug fixes)
-- 1-2: Admin/maintenance
+- 9-10: Launch-related or high-visibility distribution (PH, HN, viral content potential)
+- 7-8: Daily distribution (LinkedIn post, community engagement, DMs)
+- 5-6: Content creation (blog, video recording, editing)
+- 3-4: Product work (only if blocking the marketing plan)
+- 1-2: Admin
 
 Respond with a JSON array of tasks:
 [
   {
-    "title": "string — specific and actionable",
-    "why": "string — 1-2 sentences on why this grows the business today",
+    "title": "string",
+    "why": "string",
     "estimated_minutes": integer,
     "project_tag": "string",
     "priority_score": float

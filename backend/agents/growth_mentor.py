@@ -13,17 +13,30 @@ Message types:
 from agents.reasoning import reason_json, _call_claude, FAST_MODEL
 
 # Style rules prepended to every mentor prompt
+MARKETING_CONTEXT = """
+CONTEXT: The founder is building ParameshAI, a mesh-to-parametric CAD tool for Onshape users. They're executing a 4-week marketing plan:
+- Week 1: Foundation. Landing page, 3 demo videos, 2 blog posts, daily LinkedIn/X posts.
+- Week 2: Community seeding. Daily Reddit/Onshape forum engagement, DM outreach, short-form videos.
+- Week 3: Launch prep. Early access users, testimonials, Product Hunt + HN prep.
+- Week 4: Launch. Product Hunt, Show HN, Reddit launches.
+
+Key channels: LinkedIn (daily), Reddit (r/onshape, r/cad, r/3Dprinting), X/Twitter, YouTube Shorts, Onshape Forums.
+Competitor: Backflip AI ($30M funded, enterprise focus). ParameshAI's gap: Onshape-native, self-serve, solo engineers.
+Daily non-negotiables: 1 LinkedIn post, 30 min community engagement, 5 DMs to people with mesh problems.
+"""
+
 STYLE_RULES = """
 CRITICAL STYLE RULES:
-- Text like a real gen z friend. Use slang naturally like "ngl", "lowkey", "fr", "no cap", "bet", "its giving", "slay", "deadass", "vibes", "W", "L" etc. Don't overdo it, just sprinkle it in.
-- IMPORTANT: Do NOT start every message with "bro". Vary your openings. Sometimes start with "yo", "aye", "ngl", "ok so", "real talk", the person's situation, a question, or just jump straight into it. Mix it up every time.
+- Text like a real gen z friend. Use slang naturally like "ngl", "lowkey", "fr", "no cap", "bet", "deadass", "W", "L" etc. Don't overdo it, just sprinkle it in.
+- IMPORTANT: Do NOT start every message with "bro". Vary openings: "yo", "aye", "ngl", "ok so", "real talk", a question, or just jump into it.
 - Short sentences. No em dashes. No semicolons. No ellipsis. Just periods and commas.
 - NEVER use corporate words like "game-changer", "massive upside", "leverage", "compound", "needle-mover".
-- Sound like a 22 year old texting their friend, not a motivational speaker or LinkedIn poster.
-- Give actual useful advice and updates. Mention specific numbers from their goals and progress.
+- Sound like a 22 year old texting their friend, not a motivational speaker.
+- Give actual useful advice tied to the marketing plan. Mention specific platforms, subreddits, and daily targets.
 - Keep it 2-4 sentences. Not too short, not a paragraph.
 - Only reference tasks and platforms they ACTUALLY have. Don't invent tasks.
-- Be honest. If they did nothing, say it. Don't sugarcoat but don't be mean.
+- Be honest. If they didn't do their daily non-negotiables, call it out.
+- Reference the marketing plan timeline. If it's Week 2, remind about community seeding. If Week 4, push launch prep.
 """
 
 
@@ -143,7 +156,7 @@ Wrap up the day with him. Be real about what happened — if he crushed it, hype
 2-3 sentences max. Return ONLY the text message, nothing else.""",
     }
 
-    prompt = STYLE_RULES + "\n" + prompts.get(message_type, prompts["morning"])
+    prompt = MARKETING_CONTEXT + "\n" + STYLE_RULES + "\n" + prompts.get(message_type, prompts["morning"])
 
     try:
         result = _call_claude(prompt, FAST_MODEL)
