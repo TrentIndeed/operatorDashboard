@@ -725,12 +725,31 @@ def send_mentor_message(body: dict, db: Session = Depends(get_db)):
     tasks = db.query(Task).filter(Task.status == "pending").order_by(Task.priority_score.desc()).all()
     goals = db.query(Goal).filter(Goal.status == "active").all()
     projects = db.query(Project).all()
-    completed = db.query(Task).filter(Task.status == "done").count()
+
+    # Get completed tasks today
+    from db.database import GithubRepo
+    completed_tasks_today = db.query(Task).filter(Task.status == "done").all()
+    completed_count = len(completed_tasks_today)
+
+    # Get recent GitHub commits
+    recent_commits = []
+    repos = db.query(GithubRepo).all()
+    for r in repos:
+        if r.last_commit_at and r.last_commit_message:
+            # Include commits from last 24 hours
+            try:
+                commit_time = datetime.fromisoformat(str(r.last_commit_at).replace("Z", "+00:00")) if isinstance(r.last_commit_at, str) else r.last_commit_at
+                if (datetime.utcnow() - commit_time.replace(tzinfo=None)).total_seconds() < 86400:
+                    recent_commits.append({
+                        "repo": r.name,
+                        "message": r.last_commit_message[:60],
+                    })
+            except Exception:
+                pass
 
     # Get available hours
     user = db.query(User).first()
     day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-    # Use Eastern time for schedule (UTC-4 or UTC-5)
     from datetime import timezone
     eastern_offset = timedelta(hours=-4)  # EDT
     now_eastern = datetime.now(timezone.utc) + eastern_offset
@@ -743,16 +762,16 @@ def send_mentor_message(body: dict, db: Session = Depends(get_db)):
         except:
             pass
 
-    # Always send — even on off days, the mentor checks in
-
-    # Generate message
+    # Generate message with full context
     msg = generate_mentor_message(
         message_type=message_type,
         tasks=[{"title": t.title, "estimated_minutes": t.estimated_minutes, "priority_score": t.priority_score, "project_tag": t.project_tag} for t in tasks],
         goals=[{"title": g.title, "progress": g.progress} for g in goals],
         projects=[{"name": p.name, "stage_label": p.stage_label} for p in projects],
-        completed_today=completed,
+        completed_today=completed_count,
         available_hours=available_hours,
+        completed_tasks=[{"title": t.title} for t in completed_tasks_today],
+        recent_commits=recent_commits,
     )
 
     # Send via Twilio

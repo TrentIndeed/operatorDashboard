@@ -34,6 +34,8 @@ def generate_mentor_message(
     projects: list[dict],
     completed_today: int = 0,
     available_hours: float = 2,
+    completed_tasks: list[dict] = None,
+    recent_commits: list[dict] = None,
 ) -> str:
     """
     Generate a personalized growth mentor SMS message.
@@ -45,6 +47,8 @@ def generate_mentor_message(
         projects: User's projects
         completed_today: Tasks completed so far today
         available_hours: Hours available today
+        completed_tasks: Tasks completed today (titles)
+        recent_commits: Recent GitHub commits today
 
     Returns:
         SMS message string (under 300 chars for readability)
@@ -64,6 +68,18 @@ def generate_mentor_message(
         for p in projects[:4]
     ) or "No projects"
 
+    completed_summary = ""
+    if completed_tasks:
+        completed_summary = "\n\nWhat they accomplished today:\n" + "\n".join(
+            f"- DONE: {t.get('title', '')}" for t in completed_tasks[:10]
+        )
+
+    commits_summary = ""
+    if recent_commits:
+        commits_summary = "\n\nTheir GitHub activity today:\n" + "\n".join(
+            f"- {c.get('repo', '')}: {c.get('message', '')}" for c in recent_commits[:5]
+        )
+
     prompts = {
         "morning": f"""You're texting your boy who's a solo founder. You're his growth advisor and close friend. It's 7am.
 
@@ -72,10 +88,11 @@ His tasks today:
 
 Goals:
 {goal_summary}
+{completed_summary}{commits_summary}
 
 Available hours: {available_hours}h
 
-Text him like you're his best friend who happens to be a killer business advisor. Keep it real, keep it short. Tell him what to do FIRST today. No corporate BS, no motivational poster energy. Talk like a real person texting their friend.
+Text him like you're his best friend who happens to be a killer business advisor. Keep it real, keep it short. Tell him what to do FIRST today. If he made commits or progress yesterday, acknowledge it. No corporate BS, no motivational poster energy. Talk like a real person texting their friend.
 
 2-3 sentences max. Return ONLY the text message, nothing else.""",
 
@@ -83,10 +100,11 @@ Text him like you're his best friend who happens to be a killer business advisor
 
 His tasks today:
 {task_summary}
+{completed_summary}{commits_summary}
 
 Completed so far: {completed_today}
 
-Check in on him. Has he done the important stuff? If not, call it out — but like a friend, not a boss. Maybe roast him a little if he's slacking. Keep it real.
+Check in on him. Has he done the important stuff? If he made progress (completed tasks or pushed code), hype him up. If not, call it out — but like a friend, not a boss. Keep it real.
 
 2-3 sentences max. Return ONLY the text message, nothing else.""",
 
@@ -94,12 +112,13 @@ Check in on him. Has he done the important stuff? If not, call it out — but li
 
 His tasks today:
 {task_summary}
+{completed_summary}{commits_summary}
 
 Completed so far: {completed_today}
 Projects:
 {project_summary}
 
-The day's almost over. If he hasn't created content yet, tell him to do it NOW. If he hasn't done outreach, call it out. Be direct but supportive — like a friend who actually cares about his success.
+The day's almost over. If he's been coding (check commits), acknowledge that but remind him about content/outreach. If he hasn't done anything, call it out. Be direct but supportive.
 
 2-3 sentences max. Return ONLY the text message, nothing else.""",
 
@@ -107,6 +126,7 @@ The day's almost over. If he hasn't created content yet, tell him to do it NOW. 
 
 His tasks today:
 {task_summary}
+{completed_summary}{commits_summary}
 
 Completed today: {completed_today}
 Total tasks: {len(tasks)}

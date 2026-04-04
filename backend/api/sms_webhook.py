@@ -127,18 +127,40 @@ If they're just chatting or asking questions, return {{"action": "chat"}}."""
         except Exception:
             pass
 
-        # Regular conversation
-        prompt = f"""You're texting your friend who's a solo founder. You're their growth advisor.
+        # Get completed tasks and recent commits for context
+        from db.database import GithubRepo
+        completed_tasks = db.query(Task).filter(Task.status == "done").all()
+        completed_list = "\n".join(f"- DONE: {t.title}" for t in completed_tasks[:10]) if completed_tasks else "Nothing completed yet"
 
-Their tasks:
+        repos = db.query(GithubRepo).all()
+        commit_list = ""
+        for r in repos:
+            if r.last_commit_at and r.last_commit_message:
+                try:
+                    from datetime import datetime as dt
+                    commit_time = r.last_commit_at if not isinstance(r.last_commit_at, str) else dt.fromisoformat(r.last_commit_at.replace("Z", "+00:00"))
+                    if (dt.utcnow() - commit_time.replace(tzinfo=None)).total_seconds() < 86400:
+                        commit_list += f"\n- {r.name}: {r.last_commit_message[:50]}"
+                except:
+                    pass
+
+        # Regular conversation
+        prompt = f"""You're texting your friend who's a solo founder. You're their growth advisor. You know what they've been working on.
+
+Their pending tasks:
 {task_list}
 
 Their goals:
 {goal_list}
 
+What they accomplished today:
+{completed_list}
+
+Their code activity today:{commit_list or ' No commits today'}
+
 They texted: "{text}"
 
-STYLE: Text like a gen z friend. Use slang naturally (ngl, lowkey, fr, bet). No em dashes. No corporate speak. Be real and give actual advice. 2-3 sentences.
+STYLE: Text like a gen z friend. Use slang naturally (ngl, lowkey, fr, bet). No em dashes. No corporate speak. Be real and give actual advice based on what they've actually done today. Reference their commits or completed tasks if relevant. 2-3 sentences.
 
 Return ONLY the reply text."""
 
