@@ -13,16 +13,27 @@ Message types:
 from agents.reasoning import reason_json, _call_claude, FAST_MODEL
 
 # Style rules prepended to every mentor prompt
-MARKETING_CONTEXT = """
-CONTEXT: The founder is building ParameshAI, a mesh-to-parametric CAD tool for Onshape users. They're executing a 4-week marketing plan:
-- Week 1: Foundation. Landing page, 3 demo videos, 2 blog posts, daily LinkedIn/X posts.
-- Week 2: Community seeding. Daily Reddit/Onshape forum engagement, DM outreach, short-form videos.
-- Week 3: Launch prep. Early access users, testimonials, Product Hunt + HN prep.
-- Week 4: Launch. Product Hunt, Show HN, Reddit launches.
+def _get_marketing_context():
+    from datetime import date
+    plan_start = date(2026, 4, 4)
+    days_since = (date.today() - plan_start).days
+    week = min(4, max(1, (days_since // 7) + 1))
 
-Key channels: LinkedIn (daily), Reddit (r/onshape, r/cad, r/3Dprinting), X/Twitter, YouTube Shorts, Onshape Forums.
+    week_focus = {
+        1: "WEEK 1: Foundation. Focus on: landing page, 3 demo videos, 2 blog posts, daily LinkedIn/X posts. Do NOT suggest Show HN or Product Hunt yet.",
+        2: "WEEK 2: Community seeding. Focus on: daily Reddit/Onshape forum engagement, DM 5-10 people/day, 2 short-form videos, helpful answers in communities. Do NOT suggest launches yet.",
+        3: "WEEK 3: Launch prep. Focus on: early access users, collecting testimonials, preparing Product Hunt and Show HN pages, comparison content.",
+        4: "WEEK 4: Launch week. Focus on: Product Hunt launch, Show HN, Reddit launches, social blitz, follow up on all comments.",
+    }
+
+    return f"""
+CONTEXT: The founder is building ParameshAI, a mesh-to-parametric CAD tool for Onshape users.
+They're in {week_focus.get(week, week_focus[1])}
+Day {days_since + 1} of the 4-week plan.
+
 Competitor: Backflip AI ($30M funded, enterprise focus). ParameshAI's gap: Onshape-native, self-serve, solo engineers.
 Daily non-negotiables: 1 LinkedIn post, 30 min community engagement, 5 DMs to people with mesh problems.
+Key channels: LinkedIn (daily), Reddit (r/onshape, r/cad, r/3Dprinting), X/Twitter, YouTube Shorts, Onshape Forums.
 """
 
 STYLE_RULES = """
@@ -156,7 +167,7 @@ Wrap up the day with him. Be real about what happened — if he crushed it, hype
 2-3 sentences max. Return ONLY the text message, nothing else.""",
     }
 
-    prompt = MARKETING_CONTEXT + "\n" + STYLE_RULES + "\n" + prompts.get(message_type, prompts["morning"])
+    prompt = _get_marketing_context() + "\n" + STYLE_RULES + "\n" + prompts.get(message_type, prompts["morning"])
 
     try:
         result = _call_claude(prompt, FAST_MODEL)

@@ -29,16 +29,42 @@ WEEKLY CONTENT (spread across the week):
 - Film 1 YouTube Short showing before/after of a mesh conversion
 - Create 1 comparison post: manual rebuild vs ParameshAI
 
-SPECIFIC HIGH-IMPACT TASKS (suggest when relevant):
-- "Record a 'mesh to parametric in 30 seconds' demo using [specific part: gear, bracket, enclosure]"
-- "Write LinkedIn post: 'Backflip raised $30M for scan-to-CAD. Here's why I think the real gap is...' "
-- "Find and answer 3 Onshape Forum threads about mesh import or reverse engineering"
-- "DM 5 Onshape ambassadors/power users introducing ParameshAI early access"
-- "Write technical X thread: 'How surface segmentation works in mesh-to-parametric conversion'"
-- "Screen-record converting a Thingiverse STL to parametric Onshape, post as YouTube Short"
-- "Draft the Show HN post for ParameshAI (honest, technical, focused on the engineering problem)"
+WEEK-SPECIFIC TASKS (check marketing_plan_week in context):
+
+WEEK 1 — Foundation & Positioning:
+- "Write homepage hero copy and 200-word explainer for parameshai.com"
+- "Record screen-capture demo of mesh-to-parametric conversion (gear/bracket/enclosure)"
+- "Edit demo into 15-30 sec short-form clip for YouTube Shorts"
+- "Write blog post: 'Why mesh-to-parametric is still painful in 2026'"
+- "Draft 5 LinkedIn posts: problem awareness, build journey, technical insight, demo, personal story"
+- "Set up LinkedIn profile headline: 'Building ParameshAI — mesh to parametric CAD for Onshape'"
+- Do NOT suggest Show HN, Product Hunt, or launches in Week 1.
+
+WEEK 2 — Community Seeding:
+- "Answer 2-3 questions in r/onshape, r/cad, r/3Dprinting about mesh workflows (no self-promo)"
+- "DM 5 people on LinkedIn/Reddit who posted about mesh/STL/Onshape problems"
+- "Write blog: 'I converted 10 Thingiverse STLs to parametric Onshape — what worked'"
+- "Record side-by-side comparison: manual rebuild vs ParameshAI (timed)"
+- "Write X thread: 'How RANSAC + region growing identifies surfaces in a mesh'"
+- "LinkedIn post: 'Backflip raised $30M for scan-to-CAD. Here's why I think the real gap is...'"
+- Do NOT suggest launches in Week 2.
+
+WEEK 3 — Launch Prep:
+- "Give 10 early users free access, ask them to complete one task"
+- "Collect 3 short testimonials from early access users"
 - "Prepare Product Hunt ship page: screenshots, GIF demo, tagline"
-- "Send waitlist update email: 'Here's what we've built' with demo video link"
+- "Draft Show HN post for ParameshAI (honest, technical)"
+- "Draft Reddit posts for r/onshape, r/cad, r/3Dprinting (tailored to each)"
+- "Publish comparison: ParameshAI vs manual rebuild vs Backflip"
+
+WEEK 4 — Launch:
+- "Launch on Product Hunt at 12:01 AM PT (Tuesday)"
+- "Post Show HN at 9 AM ET"
+- "Cross-post to r/onshape, r/cad, r/3Dprinting"
+- "LinkedIn launch post tagging early users who gave testimonials"
+- "X thread telling the full build story"
+- "Follow up on all PH and HN comments personally"
+- "Post Day 1 results update on LinkedIn"
 
 Each task must:
 - Have a SPECIFIC, actionable title (not vague)
@@ -102,9 +128,17 @@ def generate_priority_tasks(
 
     available_minutes = available_hours * 60
 
+    # Determine which week of the 4-week marketing plan we're in
+    # Plan started ~April 4, 2026
+    from datetime import date
+    plan_start = date(2026, 4, 4)
+    days_since_start = (date.today() - plan_start).days
+    current_week = min(4, max(1, (days_since_start // 7) + 1))
+
     context = {
         "date": datetime.utcnow().isoformat(),
         "day_of_week": today_day,
+        "marketing_plan_week": current_week,
         "available_hours_today": available_hours,
         "available_minutes_today": available_minutes,
         "projects": [
