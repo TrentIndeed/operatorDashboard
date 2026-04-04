@@ -172,6 +172,8 @@ Wrap up the day with him. Be real about what happened — if he crushed it, hype
         # Catch auth errors leaking into messages
         if "authenticate" in msg.lower() or "401" in msg or "API Error" in msg:
             raise RuntimeError("Auth error in response")
+        # Strip em dashes — Claude keeps using them despite instructions
+        msg = msg.replace(" — ", ". ").replace("—", ". ")
         # Truncate
         if len(msg) > 500:
             msg = msg[:497] + "..."

@@ -258,6 +258,8 @@ Return ONLY the reply text."""
             except:
                 pass
         reply = reply.strip().strip('"').strip("'")
+        # Strip em dashes
+        reply = reply.replace(" — ", ". ").replace("—", ". ")
         # Catch auth errors
         if "authenticate" in reply.lower() or "401" in reply or "API Error" in reply:
             raise RuntimeError("Auth error")
