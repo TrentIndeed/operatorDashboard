@@ -791,6 +791,11 @@ def send_mentor_message(body: dict, db: Session = Depends(get_db)):
             timeout=15,
         )
         sent = resp.json().get("ok", False)
+        # Save to chat history so replies have context
+        if sent:
+            from db.database import ChatMessage
+            db.add(ChatMessage(role="mentor", content=msg[:500]))
+            db.commit()
         print(f"[Mentor] {message_type} Telegram {'sent' if sent else 'failed'}: {msg[:80]}")
         return {"status": "ok", "message": msg, "sent": sent, "type": message_type}
     except Exception as e:

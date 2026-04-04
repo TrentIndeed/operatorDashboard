@@ -13,11 +13,38 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import httpx
 
-from db.database import get_db, Task, Project, Goal
+from db.database import get_db, Task, Project, Goal, ChatMessage
 
 router = APIRouter(prefix="/sms", tags=["messaging"])
 
 TG_API = "https://api.telegram.org/bot"
+MAX_HISTORY = 10  # Remember last 10 messages
+
+
+def _save_message(db, role: str, content: str):
+    """Save a chat message to history."""
+    db.add(ChatMessage(role=role, content=content[:500]))
+    db.commit()
+    # Trim old messages — keep only last MAX_HISTORY * 2 (both sides)
+    count = db.query(ChatMessage).count()
+    if count > MAX_HISTORY * 2:
+        oldest = db.query(ChatMessage).order_by(ChatMessage.id.asc()).limit(count - MAX_HISTORY * 2).all()
+        for msg in oldest:
+            db.delete(msg)
+        db.commit()
+
+
+def _get_chat_history(db) -> str:
+    """Get recent chat history formatted for Claude."""
+    messages = db.query(ChatMessage).order_by(ChatMessage.id.desc()).limit(MAX_HISTORY * 2).all()
+    messages.reverse()
+    if not messages:
+        return ""
+    lines = []
+    for m in messages:
+        prefix = "You" if m.role == "user" else "Mentor"
+        lines.append(f"{prefix}: {m.content}")
+    return "\n".join(lines)
 
 
 def _send_telegram(text: str, chat_id: str = ""):
@@ -185,8 +212,15 @@ If they're just chatting or asking questions, return {{"action": "chat"}}."""
         mentor_notes = (user.mentor_notes or "").strip() if user else ""
         notes_section = f"\n\nIMPORTANT context they told you to remember:\n{mentor_notes}" if mentor_notes else ""
 
-        # Regular conversation
-        prompt = f"""You're texting your friend who's a solo founder. You're their growth advisor. You know what they've been working on.
+        # Get conversation history
+        chat_history = _get_chat_history(db)
+        history_section = f"\n\nRecent conversation:\n{chat_history}" if chat_history else ""
+
+        # Save the user's message
+        _save_message(db, "user", text)
+
+        # Regular conversation with history
+        prompt = f"""You're texting your friend who's a solo founder. You're their growth advisor. You know what they've been working on. You remember your recent conversation.
 
 Their pending tasks:
 {task_list}
@@ -199,16 +233,21 @@ What they accomplished today:
 
 Their code activity today:{commit_list or ' No commits today'}
 {notes_section}
+{history_section}
 
-They texted: "{text}"
+They just texted: "{text}"
 
-STYLE: Text like a gen z friend. Use slang naturally (ngl, lowkey, fr, bet). No em dashes. No corporate speak. Be real and give actual advice based on what they've actually done today. Reference their commits or completed tasks if relevant. 2-3 sentences.
+CRITICAL RULES:
+- You have conversation history above. REMEMBER what was said. Don't repeat yourself or contradict what you just said.
+- If they told you something isn't working or isn't ready, BELIEVE THEM. Don't push them to ship broken stuff.
+- If they ask for something specific (a script, advice on X), give them THAT thing, not a generic growth pep talk.
+- Text like a gen z friend. Use slang naturally (ngl, lowkey, fr, bet). No em dashes ever. No corporate speak.
+- Be real and specific to their actual situation. 2-4 sentences.
 
 Return ONLY the reply text."""
 
         reply = _call_claude(prompt, FAST_MODEL)
         reply = reply.strip().strip('"').strip("'").strip("`")
-        # Remove json prefix
         if reply.lower().startswith("json"):
             reply = reply[4:].strip()
         if reply.startswith("{"):
@@ -225,6 +264,7 @@ Return ONLY the reply text."""
         if len(reply) > 500:
             reply = reply[:497] + "..."
         _send_telegram(reply, chat_id)
+        _save_message(db, "mentor", reply)
     except Exception:
         _send_telegram("yo im having a brain fart rn, try again in a bit or check the dashboard", chat_id)
 
