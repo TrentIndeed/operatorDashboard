@@ -41,35 +41,45 @@ CLAUDE_BIN = _find_claude_bin()
 FAST_MODEL = "claude-sonnet-4-6"
 DEEP_MODEL = "claude-opus-4-6"
 
-SYSTEM_PROMPT = """You are the AI growth engine for a solo founder's operator dashboard.
+SYSTEM_PROMPT = """You are the AI engine for a solo founder's operator dashboard.
 
 The founder is building ParameshAI — a mesh-to-parametric CAD tool for Onshape users. It converts STL/OBJ mesh files into editable parametric CAD. The ICP is solo mechanical engineers, product designers, and hardware makers who use Onshape.
 
-Key competitor: Backflip AI ($30M funded, enterprise-first, scan-to-CAD). ParameshAI's gap: Onshape-native, self-serve, accessible pricing for solo engineers and small teams.
+Key competitor: Backflip AI ($30M funded, enterprise-first, scan-to-CAD, still in closed beta, likely 2-4 months from public launch). ParameshAI's differentiators: live product (soon), live demo widget on landing page, AI assistant for post-conversion editing in Onshape, self-serve pricing, Onshape-deep focus.
 
-The founder is executing a 4-week marketing plan:
-- Week 1: Foundation — landing page, 3 demo videos, 2 blog posts, daily LinkedIn/X posts
-- Week 2: Community seeding — daily engagement in r/onshape, r/cad, r/3Dprinting, Onshape forums. DM 5-10 people/day. 2 short-form videos/week.
-- Week 3: Launch prep — early access users, testimonials, Product Hunt + HN prep
-- Week 4: Launch — Product Hunt, Show HN, Reddit launches, amplification
+Current product state:
+- Plate sketch + extrude works in the pipeline
+- Holes and chamfers close (1-2 days to fix)
+- Multi-extrusion parts (brackets, enclosures) need a few coding sessions
+- Cut-extrude logic needed for pockets/enclosures
+- Pipeline only tested on clean Fusion exports — untested on real scan meshes
+- No decimation preprocessing, no scan simulation script yet
+
+The founder is executing a PRODUCT-FIRST 4-week plan:
+- Week 1: Fix core pipeline + start outreach — holes/chamfers on degraded meshes, scan simulation script, decimation, cut-extrude for pockets, ship waitlist page, 10-15 DMs/day, blog post #1
+- Week 2: Multi-extrusion parts + grow conversations — L-brackets, motor mounts, enclosures on degraded meshes, AI mesh testing, real scan testing, first demo videos, blog post #2
+- Week 3: Beta testing + full landing page — harden pipeline, 10-15 beta testers, collect testimonials, full landing page with demos/pricing, draft launch materials, blog post #3
+- Week 4: Launch — Product Hunt (Tuesday 12:01 AM PT), Show HN (9 AM ET), Reddit launches, email waitlist, engage everywhere, analyze + decide next channels
+
+Daily time split:
+- Product development: 5-6 hours (PRIMARY until Week 3)
+- Cold outreach: 30 min (10-15 DMs/day + public replies)
+- Blog post writing: 30 min (1 post/week, AI-assisted)
+- Social media: 10 min (every other day, skip if busy)
 
 Key principles:
-- DISTRIBUTION > DEVELOPMENT: the product is being built. The bottleneck is getting it in front of people.
-- Daily outreach is mandatory: 30 min/day in communities, 20 min/day DMs
-- Content must be product-led: screen recordings, before/after demos, workflow comparisons — not generic marketing
-- LinkedIn is the #1 channel (engineers live there). X/Twitter #2. YouTube Shorts #3.
-- Community seeding (Reddit, Onshape forums) = be helpful first, mention tool only when directly relevant
-- Every content piece should either demonstrate the product, build founder credibility, or both
+- PRODUCT FIRST until Week 3: the pipeline must handle real meshes before launch
+- Cold outreach is the primary fast channel — 10-15 DMs/day to people with mesh frustrations
+- Blog posts: 1/week, AI-assisted but technically accurate, targeting SEO keywords
+- Social media is LOW priority — 10 min every other day, skip if busy
+- No launches until Week 4. No Product Hunt, no Show HN until then.
+- Pricing from Day 1: Free (5 conversions), Pro ($29/mo, 30 conversions), Pay-as-you-go ($2-3/conversion)
+- Don't store user parts — conversion history with 30-day download link only
 
-Growth channels ranked by priority:
-1. LinkedIn (founder-led, daily posts — problem awareness, build journey, demos)
-2. Onshape Forum + Reddit (r/onshape, r/cad, r/3Dprinting, r/SolidWorks — answer questions, be helpful)
-3. YouTube Shorts / TikTok (15-30 sec mesh-to-parametric demos, before/after)
-4. X/Twitter (technical threads, build-in-public, hot takes on CAD industry)
-5. Product Hunt / HN (launch events in Week 4)
-6. SEO blog posts (technical, optimized for AI search/GEO)
-7. Direct outreach (DM people posting about mesh problems)
-8. Email nurture (waitlist updates, early access invites)
+Three numbers that matter after 4 weeks:
+1. Paying customers (even 1 validates everything)
+2. Conversion success rate on real user uploads
+3. Top acquisition channel (double down, cut everything else)
 
 Always respond with valid JSON unless explicitly told otherwise.
 """
@@ -136,6 +146,41 @@ def _check_rate_limit():
         _call_timestamps.append(now)
 
 
+# Patterns for stderr/error output (CLI failure messages)
+_AUTH_STDERR_PATTERNS = [
+    "failed to authenticate", "unauthorized", "401", "login required",
+    "token expired", "invalid_token", "session expired", "not logged in",
+    "oauth error", "credential expired", "authentication required",
+]
+
+
+def _is_auth_error(stderr: str, stdout: str) -> bool:
+    """Detect OAuth/auth failures in CLI error output (not response text)."""
+    # Only check stderr for auth errors — stdout may legitimately mention auth topics
+    text = stderr.lower()
+    return any(p in text for p in _AUTH_STDERR_PATTERNS)
+
+
+def _run_claude_subprocess(prompt_file: str, model: str) -> subprocess.CompletedProcess:
+    """Run the Claude CLI subprocess once."""
+    with open(prompt_file, 'r', encoding='utf-8') as pf:
+        return subprocess.run(
+            [
+                CLAUDE_BIN,
+                "--model", model,
+                "--output-format", "json",
+                "--max-turns", "3",
+                "--append-system-prompt", SYSTEM_PROMPT,
+            ],
+            stdin=pf,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
+
+
 def _call_claude(prompt: str, model: str = FAST_MODEL) -> str:
     """
     Call Claude via the CLI. Uses OAuth from your Claude Code login.
@@ -146,6 +191,7 @@ def _call_claude(prompt: str, model: str = FAST_MODEL) -> str:
     - Prompt length capped at MAX_PROMPT_CHARS
     - Rate limited to MAX_CALLS_PER_HOUR
     - Subprocess timeout at 180s
+    - Auth failure detection with one retry
     """
     # Sanitize and rate limit
     prompt = _sanitize_prompt(prompt)
@@ -160,23 +206,31 @@ def _call_claude(prompt: str, model: str = FAST_MODEL) -> str:
         prompt_file = f.name
 
     try:
-        # Use stdin to pass the prompt — avoids shell escaping issues with -p
-        with open(prompt_file, 'r', encoding='utf-8') as pf:
-            result = subprocess.run(
-                [
-                    CLAUDE_BIN,
-                    "--model", model,
-                    "--output-format", "json",
-                    "--max-turns", "3",
-                    "--append-system-prompt", SYSTEM_PROMPT,
-                ],
-                stdin=pf,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=180,
-            )
+        result = _run_claude_subprocess(prompt_file, model)
+
+        # Detect auth failure and retry once
+        if result.returncode not in (0, 1) and _is_auth_error(result.stderr, result.stdout):
+            print(f"[Claude] Auth failure detected (exit {result.returncode}), retrying in 5s...")
+            # Write status file so health check picks it up
+            try:
+                import datetime
+                with open("data/claude-auth-status.txt", "w") as sf:
+                    sf.write(f"EXPIRED {datetime.datetime.now()}")
+            except OSError:
+                pass
+            time.sleep(5)
+            # Re-write the prompt file (stdin was consumed)
+            with open(prompt_file, 'w', encoding='utf-8') as f:
+                f.write(prompt)
+            result = _run_claude_subprocess(prompt_file, model)
+            if result.returncode in (0, 1):
+                print("[Claude] Retry succeeded after auth failure")
+                try:
+                    import datetime
+                    with open("data/claude-auth-status.txt", "w") as sf:
+                        sf.write(f"OK {datetime.datetime.now()}")
+                except OSError:
+                    pass
     except FileNotFoundError:
         raise RuntimeError(
             f"Claude CLI not found at '{CLAUDE_BIN}'. "
@@ -193,6 +247,14 @@ def _call_claude(prompt: str, model: str = FAST_MODEL) -> str:
         print(f"[Claude] stderr (first 300): {result.stderr[:300]}")
 
     if result.returncode not in (0, 1):
+        # Write auth status on persistent failure
+        if _is_auth_error(result.stderr, result.stdout):
+            try:
+                import datetime
+                with open("data/claude-auth-status.txt", "w") as sf:
+                    sf.write(f"EXPIRED {datetime.datetime.now()}")
+            except OSError:
+                pass
         raise RuntimeError(
             f"Claude CLI failed (exit {result.returncode}): {result.stderr}"
         )

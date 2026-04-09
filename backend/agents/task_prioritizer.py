@@ -11,73 +11,96 @@ from agents.reasoning import reason_json, FAST_MODEL
 from db.database import Task, Project, Goal, AISuggestion, User
 
 
-PRIORITIZE_PROMPT = """Generate today's top tasks for a solo founder executing a 4-week marketing plan for ParameshAI (mesh-to-parametric CAD for Onshape). The mix should be:
+PRIORITIZE_PROMPT = """Generate today's top tasks for a solo founder executing a PRODUCT-FIRST 4-week plan for ParameshAI (mesh-to-parametric CAD for Onshape).
 
-- 2-3 DISTRIBUTION tasks (content creation, community engagement, outreach, launches)
-- 1 PRODUCT task (only if there's a critical blocker for the marketing plan)
-- 0-1 ADMIN tasks (only if absolutely necessary)
+DAILY TIME SPLIT:
+- Product development: 5-6 hours (PRIMARY until Week 3)
+- Cold outreach: 30 min (10-15 DMs/day + 2-3 public forum replies)
+- Blog post writing: 30 min (1 post/week, AI-assisted)
+- Social media: 10 min (every other day, skip if busy)
 
-DAILY NON-NEGOTIABLES (include at least 2 of these every day):
-- "Post 1 LinkedIn update about ParameshAI" (problem awareness, build journey, demo, or technical insight)
-- "Spend 30 min in r/onshape, r/cad, r/3Dprinting answering questions (no self-promo, just be helpful)"
-- "DM 5 people who posted about mesh/STL/Onshape problems on LinkedIn or Reddit"
-- "Post 2-3 tweets on X about mesh-to-parametric workflows or build progress"
-
-WEEKLY CONTENT (spread across the week):
-- Record 1 screen-capture demo of a mesh-to-parametric conversion (15-30 sec short-form)
-- Write 1 technical blog post (mesh workflows, reverse engineering, Onshape tips)
-- Film 1 YouTube Short showing before/after of a mesh conversion
-- Create 1 comparison post: manual rebuild vs ParameshAI
+TASK MIX:
+- 3-4 PRODUCT tasks (pipeline work, testing, bug fixes — this is the bulk of the day)
+- 1 OUTREACH task (DMs, forum replies — 30 min)
+- 0-1 CONTENT task (blog writing, video recording — 30 min)
+- Do NOT generate social media tasks unless it's every-other-day and the user has time
 
 WEEK-SPECIFIC TASKS (check marketing_plan_week in context):
 
-WEEK 1 — Foundation & Positioning:
-- "Write homepage hero copy and 200-word explainer for parameshai.com"
-- "Record screen-capture demo of mesh-to-parametric conversion (gear/bracket/enclosure)"
-- "Edit demo into 15-30 sec short-form clip for YouTube Shorts"
-- "Write blog post: 'Why mesh-to-parametric is still painful in 2026'"
-- "Draft 5 LinkedIn posts: problem awareness, build journey, technical insight, demo, personal story"
-- "Set up LinkedIn profile headline: 'Building ParameshAI — mesh to parametric CAD for Onshape'"
-- Do NOT suggest Show HN, Product Hunt, or launches in Week 1.
+WEEK 1 — Fix Core Pipeline + Start Outreach:
+Product tasks:
+- "Fix hole detection (RANSAC cylinder fitting) on clean test meshes"
+- "Fix chamfer/fillet detection on plates"
+- "Build scan simulation script using lidar, industrial, and ai_mesh presets"
+- "Run degraded meshes through pipeline, fix noise tolerance in RANSAC/plane fitting"
+- "Add Open3D/trimesh decimation as first pipeline stage (target 20-50K triangles)"
+- "Implement cut-extrude: parallel plane pair detection for pockets/channels"
+- "Test: U-channel and open-top box should reconstruct as extrude + cut-extrude"
+Marketing tasks:
+- "Ship minimal waitlist page: one-liner, GIF of plate conversion, email signup, 'How did you hear?' field"
+- "Cold outreach: search Onshape forum, r/onshape, r/cad, r/3Dprinting, LinkedIn for mesh frustration posts"
+- "DM 10-15 people who posted about mesh/STL/Onshape problems"
+- "Reply to 2-3 forum threads with genuine helpful answers (no self-promo)"
+- "Write blog post #1 targeting 'convert STL to parametric CAD' (800-1200 words)"
+- Do NOT suggest Show HN, Product Hunt, launches, or heavy social media.
 
-WEEK 2 — Community Seeding:
-- "Answer 2-3 questions in r/onshape, r/cad, r/3Dprinting about mesh workflows (no self-promo)"
-- "DM 5 people on LinkedIn/Reddit who posted about mesh/STL/Onshape problems"
-- "Write blog: 'I converted 10 Thingiverse STLs to parametric Onshape — what worked'"
-- "Record side-by-side comparison: manual rebuild vs ParameshAI (timed)"
-- "Write X thread: 'How RANSAC + region growing identifies surfaces in a mesh'"
-- "LinkedIn post: 'Backflip raised $30M for scan-to-CAD. Here's why I think the real gap is...'"
-- Do NOT suggest launches in Week 2.
+WEEK 2 — Multi-Extrusion Parts + Grow Conversations:
+Product tasks:
+- "Build multi-extrusion: L-brackets (two extrusions at 90 degrees)"
+- "Build multi-extrusion: motor mounts (plate + raised boss/standoff)"
+- "Build multi-extrusion: simple enclosures (extrude + cut-extrude)"
+- "Test all multi-extrusion parts on degraded meshes, not just clean exports"
+- "Download 5 mechanical parts from Meshy, run through pipeline, identify failures"
+- "Add wider angular threshold for AI mesh plane detection"
+- "Download 3-5 real scan meshes from Artec 3D / Sketchfab, run through pipeline"
+- "Record first demo videos: 10-15 sec each, mesh in → parametric out → edit dimension"
+Marketing tasks:
+- "Continue 10-15 DMs/day, follow up with Week 1 responders"
+- "Once demo videos ready: include them in DMs for higher response rates"
+- "Write blog post #2 targeting 'mesh to Onshape' or 'reverse engineer STL to STEP'"
+- Do NOT suggest launches.
 
-WEEK 3 — Launch Prep:
-- "Give 10 early users free access, ask them to complete one task"
-- "Collect 3 short testimonials from early access users"
-- "Prepare Product Hunt ship page: screenshots, GIF demo, tagline"
-- "Draft Show HN post for ParameshAI (honest, technical)"
+WEEK 3 — Beta Testing + Full Landing Page:
+Product tasks (4-5 hours — some time shifts to marketing):
+- "Review every failed conversion from Week 2, fix most common failure modes"
+- "Add clear error messages for unsupported geometry"
+- "Give 10-15 beta testers access, ask each to convert one part from their workflow"
+- "Collect feedback: 'Did it work? What broke? What would make this useful?'"
+- "Start AI assistant MVP: natural language to FeatureScript parameter update"
+Marketing tasks (2 hours/day):
+- "Build full landing page: hero + demo video, 3-4 looping demos, how-it-works, pricing, CTA"
+- "Pricing: Free (5 conversions), Pro ($29/mo, 30 conversions), Pay-as-you-go ($2-3/conversion)"
+- "Collect 2-3 testimonials from beta testers, add to landing page"
+- "Draft Product Hunt ship page: 5 screenshots, GIF demo, tagline, maker story"
+- "Draft Show HN post: technical, honest, focused on engineering problem"
 - "Draft Reddit posts for r/onshape, r/cad, r/3Dprinting (tailored to each)"
-- "Publish comparison: ParameshAI vs manual rebuild vs Backflip"
+- "Write blog post #3 targeting 'Backflip AI alternative' or 'AI mesh to CAD tool'"
 
 WEEK 4 — Launch:
 - "Launch on Product Hunt at 12:01 AM PT (Tuesday)"
 - "Post Show HN at 9 AM ET"
-- "Cross-post to r/onshape, r/cad, r/3Dprinting"
-- "LinkedIn launch post tagging early users who gave testimonials"
-- "X thread telling the full build story"
-- "Follow up on all PH and HN comments personally"
+- "Post to r/onshape, r/cad, r/3Dprinting throughout the day"
+- "LinkedIn launch post tagging beta testers who gave testimonials"
+- "DM everyone on beta list and outreach list: 'We just launched'"
+- "Email waitlist: 'ParameshAI is live — here's your free account'"
+- "Respond personally to every comment on PH, HN, and Reddit"
 - "Post Day 1 results update on LinkedIn"
+- "Blog post #4: launch retrospective — 'I built a mesh-to-CAD tool and launched in 4 weeks'"
+- "Record 'Getting Started' tutorial video for new signups"
+- "Analyze: where did signups come from? Top channel? Conversion success rate?"
 
 Each task must:
 - Have a SPECIFIC, actionable title (not vague)
-- Explain WHY it matters for the marketing plan
-- Have a realistic time estimate
+- Explain WHY it matters for the plan
+- Have a realistic time estimate matching the daily time split
 - Be tagged to the right project using slugs from context
 
 Scoring guide (priority_score 0-10):
-- 9-10: Launch-related or high-visibility distribution (PH, HN, viral content potential)
-- 7-8: Daily distribution (LinkedIn post, community engagement, DMs)
-- 5-6: Content creation (blog, video recording, editing)
-- 3-4: Product work (only if blocking the marketing plan)
-- 1-2: Admin
+- 9-10: Critical pipeline work blocking the plan (Weeks 1-2) or launch tasks (Week 4)
+- 7-8: Important product work (testing, new geometry types, bug fixes)
+- 5-6: Cold outreach (DMs, forum replies — daily non-negotiable)
+- 3-4: Content creation (blog writing, video recording)
+- 1-2: Social media, admin
 
 Respond with a JSON array of tasks:
 [
@@ -131,7 +154,7 @@ def generate_priority_tasks(
     # Determine which week of the 4-week marketing plan we're in
     # Plan started ~April 4, 2026
     from datetime import date
-    plan_start = date(2026, 4, 4)
+    plan_start = date(2026, 4, 8)
     days_since_start = (date.today() - plan_start).days
     current_week = min(4, max(1, (days_since_start // 7) + 1))
 

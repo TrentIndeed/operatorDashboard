@@ -288,6 +288,17 @@ class ChatMessage(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class AgentMemory(Base):
+    """Persistent memory for the autonomous mentor agent across runs."""
+    __tablename__ = "agent_memory"
+    id = Column(Integer, primary_key=True, index=True)
+    run_type = Column(String, nullable=False)  # "morning" | "midday" | "evening"
+    findings = Column(Text)  # JSON: what the agent discovered during analysis
+    message_sent = Column(Text)  # the Telegram message that was sent
+    tools_used = Column(Text)  # JSON: list of tools the agent used
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 def get_db():
     db = SessionLocal()
     try:

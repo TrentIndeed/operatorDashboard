@@ -514,62 +514,229 @@ async def ai_generate_draft(
     return draft
 
 
+def _bg_autonomous_generate():
+    """Background: run autonomous agent to generate all AI data at once."""
+    from db.database import (
+        SessionLocal, Task, AISuggestion, NewsBriefing, MarketGap,
+        ContentDraft, ContentScheduleItem, User, AgentMemory,
+    )
+    from agents.autonomous_generate import run_autonomous_generate
+    from agents.dashboard_snapshot import get_snapshot
+    import json as _json
+
+    db = SessionLocal()
+    try:
+        snapshot = get_snapshot(db)
+        result = run_autonomous_generate(snapshot)
+
+        if not result["success"]:
+            print(f"[GenerateAll] Autonomous agent failed: {result['error']}. Falling back to old method.")
+            db.close()
+            # Fallback: run old individual generators
+            _bg_generate_tasks()
+            _bg_generate_suggestions()
+            _bg_generate_briefing()
+            _bg_scan_market()
+            return
+
+        data = result["data"]
+
+        # --- Write tasks ---
+        tasks_data = data.get("tasks", [])
+        if tasks_data:
+            # Remove old AI-generated pending tasks
+            old_ai = db.query(Task).filter(Task.ai_generated == True, Task.status == "pending").all()
+            for t in old_ai:
+                db.delete(t)
+            for t in tasks_data:
+                if not isinstance(t, dict):
+                    continue
+                db.add(Task(
+                    title=t.get("title", ""),
+                    why=t.get("why"),
+                    estimated_minutes=int(t.get("estimated_minutes", 30)),
+                    project_tag=t.get("project_tag"),
+                    priority_score=float(t.get("priority_score", 5.0)),
+                    ai_generated=True,
+                    status="pending",
+                ))
+            db.commit()
+            print(f"[GenerateAll] Wrote {len(tasks_data)} tasks")
+
+        # --- Write suggestions ---
+        suggestions_data = data.get("suggestions", [])
+        for s in suggestions_data[:5]:
+            if not isinstance(s, dict):
+                continue
+            db.add(AISuggestion(
+                body=s.get("body", ""),
+                category=s.get("category"),
+            ))
+        if suggestions_data:
+            db.commit()
+            print(f"[GenerateAll] Wrote {len(suggestions_data)} suggestions")
+
+        # --- Write briefing ---
+        briefing_data = data.get("briefing", [])
+        if briefing_data:
+            today_str = date.today().isoformat()
+            db.query(NewsBriefing).filter(NewsBriefing.briefing_date == today_str).delete()
+            for b in briefing_data[:5]:
+                if not isinstance(b, dict):
+                    continue
+                db.add(NewsBriefing(
+                    headline=b.get("headline", ""),
+                    summary=b.get("summary"),
+                    category=b.get("category"),
+                    relevance_score=float(b.get("relevance_score", 0.5)),
+                    suggested_action=b.get("suggested_action"),
+                    briefing_date=today_str,
+                ))
+            db.commit()
+            print(f"[GenerateAll] Wrote {len(briefing_data)} briefing items")
+
+        # --- Write market gaps ---
+        gaps_data = data.get("market_gaps", [])
+        for g in gaps_data[:5]:
+            if not isinstance(g, dict):
+                continue
+            db.add(MarketGap(
+                description=g.get("description", ""),
+                source=g.get("source"),
+                source_url=g.get("source_url"),
+                opportunity_score=float(g.get("opportunity_score", 0.5)),
+                suggested_action=g.get("suggested_action"),
+                category=g.get("category"),
+                status="new",
+            ))
+        if gaps_data:
+            db.commit()
+            print(f"[GenerateAll] Wrote {len(gaps_data)} market gaps")
+
+        # --- Write content drafts ---
+        drafts_data = data.get("content_drafts", [])
+        if drafts_data:
+            # Schedule logic: find next available days
+            user = db.query(User).first()
+            day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+            user_schedule = {}
+            if user and user.weekly_hours:
+                try:
+                    user_schedule = _json.loads(user.weekly_hours)
+                except Exception:
+                    pass
+
+            for i, d in enumerate(drafts_data[:2]):
+                if not isinstance(d, dict):
+                    continue
+                platform = d.get("platform", "tiktok")
+
+                # Remove old AI drafts for same platform
+                old_drafts = db.query(ContentDraft).filter(
+                    ContentDraft.ai_generated == True,
+                    ContentDraft.platform == platform,
+                    ContentDraft.status == "draft",
+                ).all()
+                old_ids = [od.id for od in old_drafts]
+                for od in old_drafts:
+                    db.delete(od)
+                if old_ids:
+                    db.query(ContentScheduleItem).filter(
+                        ContentScheduleItem.draft_id.in_(old_ids)
+                    ).delete(synchronize_session=False)
+
+                # Find next available day
+                sched_dt = datetime.utcnow() + timedelta(days=i + 1)
+                for _ in range(7):
+                    day_key = day_names[sched_dt.weekday()]
+                    if user_schedule.get(day_key, 2) > 0:
+                        break
+                    sched_dt += timedelta(days=1)
+                sched_dt = sched_dt.replace(hour=10, minute=0, second=0, microsecond=0)
+
+                hook_score = d.get("hook_score")
+                if hook_score is not None:
+                    try:
+                        hook_score = float(hook_score)
+                        if hook_score > 1:
+                            hook_score = hook_score / 10.0
+                    except (ValueError, TypeError):
+                        hook_score = None
+
+                draft = ContentDraft(
+                    title=d.get("title", "Untitled"),
+                    body=d.get("body", ""),
+                    platform=platform,
+                    content_type=d.get("content_type", "short-form"),
+                    hook=d.get("hook"),
+                    cta=d.get("cta"),
+                    hashtags=d.get("hashtags"),
+                    status="draft",
+                    ai_generated=True,
+                    project_tag=d.get("project_tag"),
+                    hook_score=hook_score,
+                    suggested_post_time=sched_dt.isoformat(),
+                )
+                db.add(draft)
+                db.commit()
+                db.refresh(draft)
+
+                schedule_item = ContentScheduleItem(
+                    draft_id=draft.id,
+                    title=draft.title,
+                    platform=platform,
+                    scheduled_at=sched_dt,
+                    status="scheduled",
+                    block_type="content",
+                    color="#A855F7",
+                )
+                db.add(schedule_item)
+                db.commit()
+                print(f"[GenerateAll] Created draft: {draft.title[:50]} → {sched_dt.date()}")
+
+        # Save to agent memory
+        try:
+            db.add(AgentMemory(
+                run_type="generate_all",
+                message_sent=f"tasks={len(tasks_data)} suggestions={len(suggestions_data)} "
+                             f"briefing={len(briefing_data)} gaps={len(gaps_data)} drafts={len(drafts_data)}",
+                findings=result.get("error", "success"),
+                tools_used="autonomous",
+            ))
+            db.commit()
+        except Exception:
+            pass
+
+        print("[GenerateAll] Autonomous generation complete")
+
+    except Exception as e:
+        print(f"[GenerateAll] Error: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        db.close()
+
+
 @app.post("/ai/generate-all")
 async def ai_generate_all(background_tasks: BackgroundTasks):
-    """One-click AI Generate: tasks, drafts, schedule, market scan, GitHub sync.
-
-    Rate limited and runs everything in background so the frontend gets an instant response.
+    """One-click AI Generate: autonomous agent researches the web and populates
+    tasks, suggestions, briefing, market gaps, and content drafts.
+    GitHub and social syncs run in parallel.
     """
     _check_ai_endpoint_limit()
 
-    # 1. Generate priority tasks
-    background_tasks.add_task(_bg_generate_tasks)
+    # Autonomous agent handles all AI generation in one smart pass
+    background_tasks.add_task(_bg_autonomous_generate)
 
-    # 2. Generate suggestions
-    background_tasks.add_task(_bg_generate_suggestions)
-
-    # 3. Generate content drafts for top projects — spread across different days
-    # Use first two projects as context for drafts
-    from db.database import SessionLocal as _SL
-    _db = _SL()
-    _projects = _db.query(Project).limit(2).all()
-    _p1_tag = _projects[0].slug if _projects else "general"
-    _p2_tag = _projects[1].slug if len(_projects) > 1 else _p1_tag
-    _db.close()
-
-    background_tasks.add_task(
-        _bg_generate_draft_and_schedule,
-        "Build in public: show a real result or milestone from this week — make it shareable and save-worthy",
-        "tiktok", "short-form", _p1_tag, 1,
-    )
-    background_tasks.add_task(
-        _bg_generate_draft_and_schedule,
-        "Tutorial or demo that solves a real problem for potential customers — optimize for SEO and watch time",
-        "youtube", "script", _p2_tag, 3,
-    )
-
-    # 4. Generate today's briefing
-    background_tasks.add_task(_bg_generate_briefing)
-
-    # 5. Scan market for gaps
-    background_tasks.add_task(_bg_scan_market)
-
-    # 6. Sync GitHub repos
+    # API syncs still run in parallel (no Claude needed)
     background_tasks.add_task(_bg_sync_github)
-
-    # 7. Sync social media (YouTube, TikTok, Twitter)
     background_tasks.add_task(_bg_sync_social)
 
     return {
         "status": "generating",
-        "message": "AI is generating tasks, drafts, briefing, scanning market, and syncing everything...",
+        "message": "Autonomous agent is researching and generating everything...",
         "queued": [
-            "generate_tasks",
-            "generate_suggestions",
-            "generate_draft_tiktok",
-            "generate_draft_youtube",
-            "generate_briefing",
-            "scan_market",
+            "autonomous_generate (tasks + suggestions + briefing + market + drafts)",
             "sync_github",
             "sync_social",
         ],
@@ -706,77 +873,10 @@ Return ONLY this JSON format:
         raise HTTPException(status_code=500, detail=f"Failed to parse: {e}")
 
 
-# --- Growth Mentor SMS ---
+# --- Growth Mentor (Autonomous Agent) ---
 
-@app.post("/mentor/send")
-def send_mentor_message(body: dict, db: Session = Depends(get_db)):
-    """Send a growth mentor SMS. Type: morning | midday | afternoon | evening"""
-    _check_ai_endpoint_limit()
-
-    message_type = body.get("type", "morning")
-    if message_type not in ("morning", "midday", "afternoon", "evening"):
-        raise HTTPException(status_code=400, detail="Type must be: morning, midday, afternoon, evening")
-
-    from agents.growth_mentor import generate_mentor_message
-    import json as _json
-    from db.database import User
-
-    # Get current state
-    tasks = db.query(Task).filter(Task.status == "pending").order_by(Task.priority_score.desc()).all()
-    goals = db.query(Goal).filter(Goal.status == "active").all()
-    projects = db.query(Project).all()
-
-    # Get completed tasks today
-    from db.database import GithubRepo
-    completed_tasks_today = db.query(Task).filter(Task.status == "done").all()
-    completed_count = len(completed_tasks_today)
-
-    # Get recent GitHub commits
-    recent_commits = []
-    repos = db.query(GithubRepo).all()
-    for r in repos:
-        if r.last_commit_at and r.last_commit_message:
-            # Include commits from last 24 hours
-            try:
-                commit_time = datetime.fromisoformat(str(r.last_commit_at).replace("Z", "+00:00")) if isinstance(r.last_commit_at, str) else r.last_commit_at
-                if (datetime.utcnow() - commit_time.replace(tzinfo=None)).total_seconds() < 86400:
-                    recent_commits.append({
-                        "repo": r.name,
-                        "message": r.last_commit_message[:60],
-                    })
-            except Exception:
-                pass
-
-    # Get available hours
-    user = db.query(User).first()
-    day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-    from datetime import timezone
-    eastern_offset = timedelta(hours=-4)  # EDT
-    now_eastern = datetime.now(timezone.utc) + eastern_offset
-    today_day = day_names[now_eastern.weekday()]
-    available_hours = 2
-    if user and user.weekly_hours:
-        try:
-            schedule = _json.loads(user.weekly_hours)
-            available_hours = schedule.get(today_day, 2)
-        except:
-            pass
-
-    # Generate message with full context
-    msg = generate_mentor_message(
-        message_type=message_type,
-        tasks=[{"title": t.title, "estimated_minutes": t.estimated_minutes, "priority_score": t.priority_score, "project_tag": t.project_tag} for t in tasks],
-        goals=[{"title": g.title, "progress": g.progress} for g in goals],
-        projects=[{"name": p.name, "stage_label": p.stage_label} for p in projects],
-        completed_today=completed_count,
-        available_hours=available_hours,
-        completed_tasks=[{"title": t.title} for t in completed_tasks_today],
-        recent_commits=recent_commits,
-        mentor_notes=user.mentor_notes or "" if user else "",
-    )
-
-    # Send via Twilio
-    # Send via Telegram
+def _send_mentor_telegram(msg: str, message_type: str, db: Session, agent_mode: str = "autonomous") -> dict:
+    """Send a mentor message via Telegram and save to chat history + agent memory."""
     tg_token = os.getenv("TELEGRAM_BOT_TOKEN")
     tg_chat = os.getenv("TELEGRAM_CHAT_ID")
 
@@ -791,16 +891,105 @@ def send_mentor_message(body: dict, db: Session = Depends(get_db)):
             timeout=15,
         )
         sent = resp.json().get("ok", False)
-        # Save to chat history so replies have context
         if sent:
             from db.database import ChatMessage
             db.add(ChatMessage(role="mentor", content=msg[:500]))
             db.commit()
-        print(f"[Mentor] {message_type} Telegram {'sent' if sent else 'failed'}: {msg[:80]}")
-        return {"status": "ok", "message": msg, "sent": sent, "type": message_type}
+        print(f"[Mentor] {message_type} ({agent_mode}) Telegram {'sent' if sent else 'failed'}: {msg[:80]}")
+        return {"status": "ok", "message": msg, "sent": sent, "type": message_type, "agent": agent_mode}
     except Exception as e:
         print(f"[Mentor] Telegram failed: {e}")
         return {"status": "ok", "message": msg, "sent": False, "reason": str(e)}
+
+
+@app.post("/mentor/send")
+def send_mentor_message(body: dict, db: Session = Depends(get_db)):
+    """Send a growth mentor message using the autonomous agent (with fallback)."""
+    _check_ai_endpoint_limit()
+
+    message_type = body.get("type", "morning")
+    if message_type not in ("morning", "midday", "afternoon", "evening"):
+        raise HTTPException(status_code=400, detail="Type must be: morning, midday, afternoon, evening")
+
+    # --- Phase 1: Try autonomous agent ---
+    try:
+        from agents.autonomous_mentor import run_autonomous_mentor
+        from agents.dashboard_snapshot import get_snapshot
+        from db.database import AgentMemory
+
+        snapshot = get_snapshot(db)
+        result = run_autonomous_mentor(
+            message_type=message_type,
+            snapshot=snapshot,
+        )
+
+        if result["success"] and result["message"]:
+            msg = result["message"]
+            # Save to agent memory for continuity
+            try:
+                db.add(AgentMemory(
+                    run_type=message_type,
+                    message_sent=msg[:500],
+                    findings=result.get("findings", ""),
+                    tools_used=str(result.get("tools_used", [])),
+                ))
+                db.commit()
+            except Exception as e:
+                print(f"[Mentor] Failed to save agent memory: {e}")
+            return _send_mentor_telegram(msg, message_type, db, agent_mode="autonomous")
+
+        print(f"[Mentor] Autonomous agent failed: {result.get('findings', 'unknown')}. Falling back.")
+    except Exception as e:
+        print(f"[Mentor] Autonomous agent error: {e}. Falling back.")
+
+    # --- Phase 2: Fallback to old one-shot mentor ---
+    from agents.growth_mentor import generate_mentor_message
+    import json as _json
+    from db.database import User, GithubRepo
+
+    tasks = db.query(Task).filter(Task.status == "pending").order_by(Task.priority_score.desc()).all()
+    goals = db.query(Goal).filter(Goal.status == "active").all()
+    projects = db.query(Project).all()
+    completed_tasks_today = db.query(Task).filter(Task.status == "done").all()
+
+    recent_commits = []
+    repos = db.query(GithubRepo).all()
+    for r in repos:
+        if r.last_commit_at and r.last_commit_message:
+            try:
+                commit_time = datetime.fromisoformat(str(r.last_commit_at).replace("Z", "+00:00")) if isinstance(r.last_commit_at, str) else r.last_commit_at
+                if (datetime.utcnow() - commit_time.replace(tzinfo=None)).total_seconds() < 86400:
+                    recent_commits.append({"repo": r.name, "message": r.last_commit_message[:60]})
+            except Exception:
+                pass
+
+    user = db.query(User).first()
+    day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    from datetime import timezone
+    eastern_offset = timedelta(hours=-4)
+    now_eastern = datetime.now(timezone.utc) + eastern_offset
+    today_day = day_names[now_eastern.weekday()]
+    available_hours = 2
+    if user and user.weekly_hours:
+        try:
+            schedule = _json.loads(user.weekly_hours)
+            available_hours = schedule.get(today_day, 2)
+        except Exception:
+            pass
+
+    msg = generate_mentor_message(
+        message_type=message_type,
+        tasks=[{"title": t.title, "estimated_minutes": t.estimated_minutes, "priority_score": t.priority_score, "project_tag": t.project_tag} for t in tasks],
+        goals=[{"title": g.title, "progress": g.progress} for g in goals],
+        projects=[{"name": p.name, "stage_label": p.stage_label} for p in projects],
+        completed_today=len(completed_tasks_today),
+        available_hours=available_hours,
+        completed_tasks=[{"title": t.title} for t in completed_tasks_today],
+        recent_commits=recent_commits,
+        mentor_notes=user.mentor_notes or "" if user else "",
+    )
+
+    return _send_mentor_telegram(msg, message_type, db, agent_mode="fallback")
 
 
 @app.get("/health")

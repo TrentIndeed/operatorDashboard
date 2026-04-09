@@ -219,8 +219,26 @@ If they're just chatting or asking questions, return {{"action": "chat"}}."""
         # Save the user's message
         _save_message(db, "user", text)
 
+        # Get marketing plan week context
+        from datetime import date as date_cls
+        _plan_start = date_cls(2026, 4, 8)
+        _days_since = (date_cls.today() - _plan_start).days
+        _week = min(4, max(1, (_days_since // 7) + 1))
+        _week_focus = {
+            1: "WEEK 1: Fix core pipeline + start outreach. PRODUCT DEV IS PRIMARY (5-6h/day). Fix holes/chamfers, scan sim, decimation, cut-extrude. Ship waitlist page. 10-15 DMs/day. Blog #1. No launches, no heavy social.",
+            2: "WEEK 2: Multi-extrusion parts + grow conversations. L-brackets, motor mounts, enclosures on degraded meshes. Demo videos. DMs with videos. Blog #2.",
+            3: "WEEK 3: Beta testing + full landing page. Harden pipeline, 10-15 beta testers, testimonials. Full landing page + pricing. Draft launch materials. Blog #3.",
+            4: "WEEK 4: Launch. PH Tuesday, Show HN, Reddit, email waitlist, engage everywhere.",
+        }
+
         # Regular conversation with history
-        prompt = f"""You're texting your friend who's a solo founder. You're their growth advisor. You know what they've been working on. You remember your recent conversation.
+        prompt = f"""You're texting your friend who's a solo founder building ParameshAI (mesh-to-parametric CAD for Onshape). You're their advisor. You remember your recent conversation.
+
+IMPORTANT CONTEXT — they're on Day {_days_since + 1} of a 4-week plan:
+{_week_focus.get(_week, _week_focus[1])}
+Daily split: Product dev 5-6h (PRIMARY), Cold outreach 30 min, Blog 30 min, Social 10 min every other day.
+Product state: plate+extrude works, holes/chamfers close, needs multi-extrusion and cut-extrude, untested on real scans.
+Competitor: Backflip AI ($30M, still closed beta).
 
 Their pending tasks:
 {task_list}
@@ -238,9 +256,10 @@ Their code activity today:{commit_list or ' No commits today'}
 They just texted: "{text}"
 
 CRITICAL RULES:
+- PRODUCT WORK IS THE PRIORITY in Weeks 1-2. Don't push marketing over coding unless they've done zero outreach.
 - You have conversation history above. REMEMBER what was said. Don't repeat yourself or contradict what you just said.
 - If they told you something isn't working or isn't ready, BELIEVE THEM. Don't push them to ship broken stuff.
-- If they ask for something specific (a script, advice on X), give them THAT thing, not a generic growth pep talk.
+- If they ask for something specific (a script, advice on X), give them THAT thing, not a generic pep talk.
 - Text like a gen z friend. Use slang naturally (ngl, lowkey, fr, bet). No em dashes ever. No corporate speak.
 - Be real and specific to their actual situation. 2-4 sentences.
 

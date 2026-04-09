@@ -15,15 +15,15 @@ from agents.reasoning import reason_json, _call_claude, FAST_MODEL
 # Style rules prepended to every mentor prompt
 def _get_marketing_context():
     from datetime import date
-    plan_start = date(2026, 4, 4)
+    plan_start = date(2026, 4, 8)
     days_since = (date.today() - plan_start).days
     week = min(4, max(1, (days_since // 7) + 1))
 
     week_focus = {
-        1: "WEEK 1: Foundation. Focus on: landing page, 3 demo videos, 2 blog posts, daily LinkedIn/X posts. Do NOT suggest Show HN or Product Hunt yet.",
-        2: "WEEK 2: Community seeding. Focus on: daily Reddit/Onshape forum engagement, DM 5-10 people/day, 2 short-form videos, helpful answers in communities. Do NOT suggest launches yet.",
-        3: "WEEK 3: Launch prep. Focus on: early access users, collecting testimonials, preparing Product Hunt and Show HN pages, comparison content.",
-        4: "WEEK 4: Launch week. Focus on: Product Hunt launch, Show HN, Reddit launches, social blitz, follow up on all comments.",
+        1: "WEEK 1: Fix core pipeline + start outreach. PRODUCT IS PRIMARY (5-6h/day). Fix holes/chamfers on degraded meshes, build scan simulation script, add decimation, implement cut-extrude. Ship minimal waitlist page. Start cold outreach (10-15 DMs/day). Blog post #1. Do NOT suggest launches or heavy social media.",
+        2: "WEEK 2: Multi-extrusion parts + grow conversations. Build L-brackets, motor mounts, enclosures on degraded meshes. Test on AI meshes and real scans. Record first demo videos (10-15 sec each). Continue 10-15 DMs/day, now with demo videos in DMs. Blog post #2. Do NOT suggest launches.",
+        3: "WEEK 3: Beta testing + full landing page. Harden pipeline, give 10-15 beta testers access, collect testimonials. Build full landing page with demos and pricing (Free/Pro/$29mo/PAYG). Draft PH, HN, Reddit launch materials. Blog post #3. Start AI assistant MVP if time.",
+        4: "WEEK 4: Launch. Product Hunt Tuesday 12:01 AM PT, Show HN 9 AM ET, Reddit launches, email waitlist, engage everywhere. Analyze: paying customers, conversion success rate, top acquisition channel.",
     }
 
     return f"""
@@ -31,9 +31,10 @@ CONTEXT: The founder is building ParameshAI, a mesh-to-parametric CAD tool for O
 They're in {week_focus.get(week, week_focus[1])}
 Day {days_since + 1} of the 4-week plan.
 
-Competitor: Backflip AI ($30M funded, enterprise focus). ParameshAI's gap: Onshape-native, self-serve, solo engineers.
-Daily non-negotiables: 1 LinkedIn post, 30 min community engagement, 5 DMs to people with mesh problems.
-Key channels: LinkedIn (daily), Reddit (r/onshape, r/cad, r/3Dprinting), X/Twitter, YouTube Shorts, Onshape Forums.
+Product state: plate sketch + extrude works, holes/chamfers close, multi-extrusion needed, cut-extrude needed, untested on real scans.
+Competitor: Backflip AI ($30M funded, enterprise focus, still in closed beta). ParameshAI's edge: live product soon, self-serve, Onshape-native.
+Daily time split: Product dev 5-6h (PRIMARY), Cold outreach 30 min (10-15 DMs), Blog writing 30 min, Social 10 min every other day.
+Three numbers that matter: paying customers, conversion success rate on real uploads, top acquisition channel.
 """
 
 STYLE_RULES = """
@@ -43,11 +44,11 @@ CRITICAL STYLE RULES:
 - Short sentences. No em dashes. No semicolons. No ellipsis. Just periods and commas.
 - NEVER use corporate words like "game-changer", "massive upside", "leverage", "compound", "needle-mover".
 - Sound like a 22 year old texting their friend, not a motivational speaker.
-- Give actual useful advice tied to the marketing plan. Mention specific platforms, subreddits, and daily targets.
+- Give actual useful advice tied to the plan. Product work is PRIMARY in Weeks 1-2. Outreach is secondary but daily.
 - Keep it 2-4 sentences. Not too short, not a paragraph.
 - Only reference tasks and platforms they ACTUALLY have. Don't invent tasks.
-- Be honest. If they didn't do their daily non-negotiables, call it out.
-- Reference the marketing plan timeline. If it's Week 2, remind about community seeding. If Week 4, push launch prep.
+- Be honest. If they didn't code or didn't do outreach, call it out. Product progress matters most.
+- Reference the plan timeline. Weeks 1-2 = product + outreach. Week 3 = beta testing + landing page. Week 4 = launch.
 """
 
 
