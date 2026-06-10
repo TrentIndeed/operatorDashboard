@@ -120,19 +120,20 @@ def get_snapshot(db: Session) -> dict:
     # --- Competitors ---
     competitors = db.query(Competitor).limit(5).all()
 
-    # --- Marketing plan week ---
-    from datetime import date as date_type
-    plan_start = date_type(2026, 4, 8)
-    days_since = (date_type.today() - plan_start).days
-    week = min(4, max(1, (days_since // 7) + 1))
+    # --- Current stage + grounding context (replaces calendar-week logic) ---
+    from agents.stage import get_stage, stage_name, stage_block, context_block, stage_check_line
+    stage = get_stage(db)
 
     return {
         "timestamp": now.isoformat(),
         "today": now_eastern.strftime("%A %B %d, %Y"),
         "available_hours_today": available_hours,
         "weekly_schedule": weekly_schedule,
-        "marketing_plan_week": week,
-        "marketing_plan_day": days_since + 1,
+        "stage": stage,
+        "stage_name": stage_name(stage),
+        "stage_block": stage_block(stage),
+        "context_block": context_block(db),
+        "stage_check": stage_check_line(db),
         "tasks": {
             "pending": [
                 {"id": t.id, "title": t.title, "minutes": t.estimated_minutes,

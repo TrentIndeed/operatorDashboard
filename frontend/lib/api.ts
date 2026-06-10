@@ -205,6 +205,20 @@ export interface Lead {
   source_url: string | null; sentiment: string | null; category: string;
   status: string; suggested_action: string | null; dm_draft: string | null;
   created_at: string;
+  // Outreach fields
+  tier: number | null; tier_reason: string | null; account_summary: string | null;
+  draft_dm: string | null; draft_public_reply: string | null;
+  include_demo_video: string | null; post_text: string | null;
+  post_url: string | null; profile_url: string | null;
+  post_date: string | null; contacted_at: string | null;
+  responded_at: string | null; follow_up_sent: boolean;
+  notes: string | null; updated_at: string | null;
+}
+export interface OutreachStats {
+  total_leads: number; tier1_count: number; tier2_count: number; tier3_count: number;
+  new_count: number; contacted_count: number; responded_count: number;
+  interested_count: number; beta_count: number; paying_count: number;
+  follow_ups_due: number;
 }
 export interface CommentReply {
   id: number; original_comment: string; username: string | null;
@@ -345,6 +359,30 @@ export const api = {
   getWaitlistStats: () => apiFetch<WaitlistStats>("/leads/waitlist/stats"),
   addWaitlistSignup: (data: { email: string; name?: string; source?: string }) =>
     apiFetch<WaitlistSignup>("/leads/waitlist", { method: "POST", body: JSON.stringify(data) }),
+
+  // Outreach Command Center
+  outreachLeads: (params?: { tier?: number; status?: string; platform?: string; search?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.tier) qs.set("tier", String(params.tier));
+    if (params?.status) qs.set("status", params.status);
+    if (params?.platform) qs.set("platform", params.platform);
+    if (params?.search) qs.set("search", params.search);
+    const q = qs.toString();
+    return apiFetch<Lead[]>(`/outreach/leads${q ? `?${q}` : ""}`);
+  },
+  outreachLead: (id: number) => apiFetch<Lead>(`/outreach/leads/${id}`),
+  createOutreachLead: (data: { username: string; platform: string; post_url: string; post_text: string; profile_url?: string; notes?: string }) =>
+    apiFetch<Lead>("/outreach/leads", { method: "POST", body: JSON.stringify(data) }),
+  updateOutreachLead: (id: number, data: Partial<Lead>) =>
+    apiFetch<Lead>(`/outreach/leads/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteOutreachLead: (id: number) =>
+    apiFetch<{ ok: boolean }>(`/outreach/leads/${id}`, { method: "DELETE" }),
+  scanSignals: () => apiFetch<{ status: string }>("/outreach/scan", { method: "POST" }),
+  draftMessages: (id: number) => apiFetch<{ status: string }>(`/outreach/leads/${id}/draft`, { method: "POST" }),
+  markContacted: (id: number) => apiFetch<Lead>(`/outreach/leads/${id}/contacted`, { method: "POST" }),
+  markFollowUp: (id: number) => apiFetch<Lead>(`/outreach/leads/${id}/follow-up`, { method: "POST" }),
+  outreachStats: () => apiFetch<OutreachStats>("/outreach/stats"),
+  outreachFollowUps: () => apiFetch<Lead[]>("/outreach/follow-ups"),
 
   // Social Sync
   syncSocial: () => apiFetch<{ synced: string[]; errors: string[] }>("/social/sync", { method: "POST" }),

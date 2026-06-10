@@ -27,17 +27,27 @@ AGENT_MAX_TURNS = 18  # More turns for the full generate-all pipeline
 
 GENERATE_SYSTEM_PROMPT = """You are an autonomous AI agent that powers a solo founder's growth dashboard.
 
-Your job: Research the founder's situation, then generate ALL the data the dashboard needs.
+Your job: Generate ALL the data the dashboard needs for tomorrow — tasks, briefing items, market gaps, content drafts. Grounded ONLY in what you can actually verify.
 
-## Your tools
-You can run bash commands, read files, and search the web. USE THEM.
-Do NOT hallucinate news or market data — actually search for it.
+## ABSOLUTELY CRITICAL — ANTI-HALLUCINATION RULES
+This is the #1 rule. The founder will lose trust if you invent facts.
 
-## Required research (do these FIRST):
-1. Web search "Backflip AI" or "mesh to CAD" for competitor news (last 7 days)
-2. Web search "site:reddit.com onshape" or "mesh to parametric" for community discussions
-3. Web search for CAD industry news or Onshape updates
-4. Check the database for current tasks, goals, and content drafts
+- Do NOT invent specific competitor news, funding rounds, beta status changes, product launches, feature releases, or pricing
+- Do NOT say "Backflip just launched X" or "Onshape shipped Y" unless you have a working URL from a real search result that confirms it
+- If a web search returns nothing reliable or specific, SKIP that briefing/gap item. An empty category is better than a made-up item.
+- Only claim something if you can cite it. If you cite it, the URL MUST be from a real search result you ran, not guessed.
+
+## Research rules
+IF you do use web search:
+- Only report facts from results that actually came back
+- Include the real URL in the source_url field (never a fabricated one)
+- If a search returned empty or irrelevant results, do not include that as a briefing/gap item
+- It is BETTER to return fewer, verified items than many fabricated ones
+
+IF you skip web search:
+- Rely on the project state given to you
+- Generate TASKS based purely on what's in the snapshot and the marketing plan
+- For briefing/market_gaps, prefer empty arrays over hallucinated content
 
 ## How to query the database
 ```bash
@@ -116,18 +126,10 @@ def run_autonomous_generate(snapshot: dict) -> dict:
     """
     _check_rate_limit()
 
-    week = snapshot.get("marketing_plan_week", 1)
-    day = snapshot.get("marketing_plan_day", 1)
     hours = snapshot.get("available_hours_today", 2)
     today = snapshot.get("today", "today")
     schedule = snapshot.get("weekly_schedule", {})
-
-    week_focus = {
-        1: "WEEK 1: Fix core pipeline + start outreach. PRODUCT PRIMARY (5-6h). Fix holes/chamfers on degraded meshes, scan sim script, decimation, cut-extrude for pockets. Ship waitlist page. 10-15 DMs/day. Blog #1. NO launches, no heavy social.",
-        2: "WEEK 2: Multi-extrusion parts + grow conversations. L-brackets, motor mounts, enclosures on degraded meshes. AI mesh + real scan testing. Record demo videos. Continue DMs with videos attached. Blog #2. NO launches.",
-        3: "WEEK 3: Beta testing + full landing page. Harden pipeline, 10-15 beta testers, collect testimonials. Full landing page with demos + pricing (Free/Pro $29mo/PAYG). Draft PH/HN/Reddit launch materials. Blog #3.",
-        4: "WEEK 4: Launch. PH Tuesday 12:01 AM PT, Show HN 9 AM ET, Reddit launches, email waitlist, engage everywhere. Analyze: paying customers, conversion rate, top channel.",
-    }
+    grounding = snapshot.get("context_block") or snapshot.get("stage_block", "")
 
     # Compact snapshot
     pending = snapshot.get("tasks", {}).get("pending", [])
@@ -135,6 +137,14 @@ def run_autonomous_generate(snapshot: dict) -> dict:
     goals = snapshot.get("goals", [])
     projects = snapshot.get("projects", [])
     commits = snapshot.get("github", {}).get("recent_commits", [])
+
+    # Anti-repetition: what's already on the board. Don't regenerate these verbatim.
+    prior_suggestions = [s.get("body", "") for s in snapshot.get("suggestions", [])]
+    prior_briefing = [b.get("headline", "") for b in snapshot.get("briefing", [])]
+    prior_task_titles = [t.get("title", "") for t in pending]
+    already_lines = "\n".join(
+        f"  - {x}" for x in (prior_task_titles[:8] + prior_suggestions[:5] + prior_briefing[:5]) if x
+    ) or "  (nothing yet)"
 
     task_lines = "\n".join(f"  - {t['title']}" for t in pending[:5]) or "  None"
     done_lines = "\n".join(f"  - {t['title']}" for t in completed[:5]) or "  None"
@@ -145,33 +155,51 @@ def run_autonomous_generate(snapshot: dict) -> dict:
     ) or "  None"
     commit_lines = "\n".join(f"  - {c['repo']}: {c['message']}" for c in commits[:5]) or "  None"
 
-    # Calculate task budget
+    # Calculate task budget (max — agent can return fewer if estimates are realistic)
     available_minutes = int(hours * 60)
     if hours == 0:
         task_count = 0
         task_instruction = "IMPORTANT: Today is a day off (0 hours). Generate an EMPTY tasks array []."
     elif hours <= 2:
         task_count = 3
-        task_instruction = f"Generate {task_count} tasks totaling ~{available_minutes} minutes."
+        task_instruction = f"User has ~{available_minutes} min today. Likely 1 realistic product task (90-120 min) + 1 outreach task (30 min). USE REAL ESTIMATES, don't compress."
     elif hours <= 4:
         task_count = 5
-        task_instruction = f"Generate {task_count} tasks totaling ~{available_minutes} minutes."
+        task_instruction = f"User has ~{available_minutes} min today. Likely 2-3 product tasks + outreach + content. USE REAL ESTIMATES."
     else:
         task_count = 7
-        task_instruction = f"Generate {task_count} tasks totaling ~{available_minutes} minutes."
+        task_instruction = f"User has ~{available_minutes} min today. Full stack: 3-4 product tasks + outreach + content. USE REAL ESTIMATES, don't compress."
 
-    prompt = f"""Generate all dashboard data for {today}.
+    prompt = f"""Generate dashboard data for {today}.
 
-CONTEXT: Solo founder building ParameshAI (mesh-to-parametric CAD for Onshape).
-Product state: plate+extrude works, holes/chamfers close, needs multi-extrusion and cut-extrude, untested on real scans.
-Competitor: Backflip AI ($30M funded, enterprise focus, still closed beta, 2-4 months from public launch).
-ParameshAI's edge: live product soon, self-serve pricing, Onshape-native, AI assistant for post-conversion editing.
-{week_focus.get(week, week_focus[1])} (Day {day} of 28-day plan)
-Daily split: Product dev 5-6h (PRIMARY), Cold outreach 30 min (10-15 DMs), Blog 30 min, Social 10 min every other day.
+{grounding}
+
+Daily split: product/pipeline work is the bulk of the day; cold outreach ~30 min ONLY in the form the stage allows; content is optional.
 
 SCHEDULE: {hours}h available today. {task_instruction}
-Task mix: 3-4 PRODUCT tasks (pipeline, testing, bugs), 1 OUTREACH task (DMs, forum), 0-1 CONTENT task (blog, video).
-Priority scoring: 9-10 critical pipeline work or launch tasks, 7-8 important product work, 5-6 outreach, 3-4 content, 1-2 social/admin.
+Task mix: mostly PRODUCT tasks (pipeline, testing, bugs). Add outreach/content ONLY if the current stage permits it (early stages keep outreach quiet and educational, no launches).
+Priority scoring: 9-10 critical pipeline work, 7-8 important product work, 5-6 stage-appropriate outreach, 3-4 content, 1-2 admin.
+
+DO NOT REPEAT what's already on the board. These were already generated — produce DIFFERENT, fresh, or advancing items, not reworded copies:
+{already_lines}
+
+CRITICAL — REALISTIC TIME ESTIMATES:
+Product/pipeline tasks take LONGER than you'd think. Use these minimums:
+- Bug fix in pipeline (chamfer detection, RANSAC tuning, plane fitting): 90-180 min
+- New feature (cut-extrude, multi-extrusion, decimation, scan sim): 120-240 min
+- Writing a test script: 60-120 min
+- Running + debugging tests on new mesh set: 60-90 min
+- Reverse engineering a failure case: 60-120 min
+Marketing tasks:
+- Cold outreach batch (10-15 DMs): 30 min
+- Forum replies (2-3 answers): 30 min
+- Blog writing (1000 words in one sitting): 60-90 min
+- Waitlist page build: 60-90 min
+- Record demo video: 15-30 min
+
+NEVER estimate a coding/debugging task at 30 min. Minimum 60 min, typically 90-120.
+If the user only has 2 hours, it's BETTER to give them 1 real task (120 min) + outreach (30 min)
+than 4 underestimated tasks that won't finish.
 
 CURRENT STATE:
 Projects: {project_lines}
@@ -180,18 +208,19 @@ Recently completed: {done_lines}
 Goals: {goal_lines}
 Git activity: {commit_lines}
 
-RESEARCH INSTRUCTIONS:
-1. Search the web for "Backflip AI" news from the last 7 days
-2. Search for trending discussions in r/onshape, r/cad, or about mesh-to-parametric workflows
-3. Search for any Onshape platform updates or CAD industry news
-4. Use what you find to make briefing items and market gaps REAL (with actual URLs and sources)
+REMINDER: Do NOT invent competitor news or feature releases. If you use web search, only report verified results with real URLs. Prefer empty arrays over hallucinated content.
+
+OPTIONAL research (skip if you can't find reliable results):
+- Web search for verifiable public posts in r/onshape or r/cad about mesh-to-parametric pain
+- Web search for verifiable Onshape platform updates or new APIs
+- Skip competitor research entirely unless you find a real, datable news article
 
 GENERATE:
-- tasks: {task_count} prioritized tasks for today (or empty array if day off)
-- suggestions: 5 growth suggestions (at least 3 about outreach/content, name specific platforms)
-- briefing: 5 items (2 growth opportunities, 1 competitor, 1 platform change, 1 industry). Use REAL news from your research.
-- market_gaps: 5 growth opportunities (communities to join, content gaps, outreach targets). Use REAL sources.
-- content_drafts: 2 drafts (1 short-form for TikTok/YouTube Shorts, 1 longer for LinkedIn/YouTube/blog)
+- tasks: {task_count} prioritized tasks for today based on the week focus and current state (or empty array if day off)
+- suggestions: 3-5 growth suggestions tied to the founder's current situation (no need to be fancy — simple and actionable)
+- briefing: 0-5 items, ONLY if you can verify them with real search results. Empty array is fine.
+- market_gaps: 0-5 items, ONLY if you found real communities/posts. Include the actual URL in source_url. Empty array is fine.
+- content_drafts: 2 drafts (1 short-form for TikTok/YouTube Shorts, 1 longer for LinkedIn/YouTube/blog) based on the founder's actual product and week
 
 Your final response must be ONLY the JSON object. No markdown, no explanation."""
 
@@ -209,6 +238,7 @@ Your final response must be ONLY the JSON object. No markdown, no explanation.""
                     "--model", FAST_MODEL,
                     "--output-format", "json",
                     "--max-turns", str(AGENT_MAX_TURNS),
+                    "--allowedTools", "WebSearch", "WebFetch", "Bash", "Read", "Glob", "Grep",
                     "--append-system-prompt", GENERATE_SYSTEM_PROMPT,
                 ],
                 stdin=pf,

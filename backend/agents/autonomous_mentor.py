@@ -19,57 +19,51 @@ import time
 from datetime import datetime
 
 from agents.reasoning import _find_claude_bin, _check_rate_limit, _is_auth_error, FAST_MODEL
+from agents.voice import STYLE_RULES
 
 CLAUDE_BIN = _find_claude_bin()
 
 # Max turns for autonomous exploration (vs 3 for one-shot)
 AGENT_MAX_TURNS = 12
 
-AGENT_SYSTEM_PROMPT = """You are an autonomous growth advisor agent for a solo founder.
+AGENT_SYSTEM_PROMPT = """You are an operator advisor for a solo founder. You send one focused message based on their actual work, code, and current stage.
 
-You have TOOLS available. Use them to gather real information before giving advice.
-Do NOT guess or make up data — actually look it up.
+## ABSOLUTELY CRITICAL — DO NOT HALLUCINATE
+This is the #1 rule. Violating it destroys trust.
 
-## Your tools
-You can run bash commands, read files, and search the web. Use them.
+- Do NOT invent facts about Backflip AI, Onshape features, competitors, funding rounds, product launches, beta status, or industry news.
+- Do NOT say "I read that..." or "latest news says..." or "they just launched...". You are NOT a journalist.
+- Do NOT mention specific competitor product features unless they are EXPLICITLY in the context given to you.
+- If you don't know something for certain, do not mention it. Silence is better than a wrong fact.
+- The founder knows his own industry. He will immediately notice if you make stuff up and stop trusting you.
 
-## How to get dashboard data
-The founder's data is in a SQLite database. Query it directly:
+## What you SHOULD reference
+Only reference things in the context given to you:
+- The founder's pending tasks and priority scores
+- Completed tasks today/recently
+- Their goals and progress
+- GitHub commits and the codebase state in the snapshot
+- The CURRENT STAGE (1-4) and what should be happening at that stage
+- Their own mentor notes and recent chat history
+
+## Stage discipline
+- The stage in the context is the truth. Match your advice to it.
+- Do NOT push launches, Show HN, Product Hunt, or outreach the stage marks off-limits. If the stage is early, product work comes first and distribution stays quiet/educational.
+
+## Optional DB lookup
+If you need deeper context, you CAN query the SQLite DB at /app/data/operator.db via Bash:
 ```bash
-python3 -c "
-import sqlite3, json
-db = sqlite3.connect('/app/data/operator.db')
-db.row_factory = sqlite3.Row
-# Example: get pending tasks
-rows = db.execute('SELECT title, priority_score, estimated_minutes, project_tag FROM tasks WHERE status=\"pending\" ORDER BY priority_score DESC LIMIT 10').fetchall()
-print(json.dumps([dict(r) for r in rows], indent=2))
-"
+python3 -c "import sqlite3; db = sqlite3.connect('/app/data/operator.db'); rows = db.execute('SELECT title, priority_score FROM tasks WHERE status=\"pending\" LIMIT 5').fetchall(); print(rows)"
 ```
+Tables: tasks, goals, projects, github_repos, content_drafts, codebase_snapshots, agent_memory, chat_messages.
 
-Useful tables: tasks, goals, projects, github_repos, content_drafts, market_gaps,
-leads, social_metrics, competitors, agent_memory, chat_messages
+DO NOT use web search. DO NOT research competitors. Analyze THEIR data and give one tactical call.
 
-## How to check GitHub
-```bash
-curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/users/TrentIndeed/events?per_page=10"
-```
-
-## How to search the web
-Use your web_search tool to find:
-- Competitor activity (Backflip AI, Onshape updates)
-- Trending discussions in r/onshape, r/cad, r/3Dprinting
-- CAD industry news that creates content opportunities
-
-## CRITICAL RULES
+## CRITICAL MESSAGE RULES
 1. Your final response must be ONLY the Telegram message text. Nothing else.
-2. Text like a gen Z friend — "ngl", "lowkey", "fr", "bet", "deadass", "W", "L"
-3. Do NOT start every message with "bro". Vary: "yo", "aye", "ngl", "ok so", "real talk", a question
-4. Short sentences. No em dashes. No semicolons. No ellipsis. Just periods and commas.
-5. NEVER use corporate words: "game-changer", "leverage", "compound", "needle-mover"
-6. Keep it 2-5 sentences. Be specific to what you actually found.
-7. If you found something interesting (competitor news, trending thread, community opportunity), mention it specifically.
-8. Be honest — if daily non-negotiables weren't met, call it out.
-9. Reference the marketing plan week and what should be happening now.
+""" + STYLE_RULES + """
+- Reference the current stage and what should be happening now.
+- NEVER mention Backflip, Onshape features, or industry news unless it's literally in the context given to you.
 """
 
 
@@ -110,17 +104,12 @@ def run_autonomous_mentor(
     memory = _get_agent_memory(db_path)
 
     # Build the exploration prompt
-    week = snapshot.get("marketing_plan_week", 1)
-    day = snapshot.get("marketing_plan_day", 1)
     hours = snapshot.get("available_hours_today", 2)
     today = snapshot.get("today", "today")
-
-    week_focus = {
-        1: "WEEK 1: Fix core pipeline + start outreach. PRODUCT PRIMARY (5-6h). Fix holes/chamfers, scan sim, decimation, cut-extrude. Waitlist page. 10-15 DMs/day. Blog #1. No launches.",
-        2: "WEEK 2: Multi-extrusion parts + grow conversations. L-brackets, motor mounts, enclosures on degraded meshes. Demo videos. Continue DMs with videos. Blog #2. No launches.",
-        3: "WEEK 3: Beta testing + full landing page. Harden pipeline, 10-15 beta testers, testimonials. Full landing page + pricing. Draft launch materials. Blog #3.",
-        4: "WEEK 4: Launch. PH Tuesday 12:01 AM PT, Show HN 9 AM ET, Reddit, email waitlist, engage everywhere.",
-    }
+    grounding = snapshot.get("context_block") or snapshot.get("stage_block", "")
+    stage_check = snapshot.get("stage_check", "")
+    if stage_check:
+        grounding = grounding + "\n\n" + stage_check
 
     # Compact snapshot for the prompt (agent can query DB for more detail)
     pending = snapshot.get("tasks", {}).get("pending", [])
@@ -143,12 +132,9 @@ def run_autonomous_mentor(
     notes_section = f"\nThings they told you to remember:\n{notes}" if notes else ""
     chat_section = f"\nRecent conversation:\n{recent_chat}" if recent_chat else ""
 
-    prompt = f"""It's {today}, {message_type} check-in. The founder has {hours}h available today.
+    prompt = f"""It's {today}. This is the founder's ONE check-in for today. He has {hours}h available.
 
-CONTEXT: Building ParameshAI (mesh-to-parametric CAD for Onshape). Competitor: Backflip AI ($30M funded, still closed beta).
-Product state: plate+extrude works, holes/chamfers close, needs multi-extrusion and cut-extrude.
-{week_focus.get(week, week_focus[1])} (Day {day} of 28-day plan)
-Daily split: Product dev 5-6h (PRIMARY), Cold outreach 30 min (10-15 DMs), Blog 30 min, Social 10 min every other day.
+{grounding}
 
 CURRENT STATE (from database snapshot):
 Pending tasks:
@@ -167,11 +153,17 @@ Git activity:
 YOUR PREVIOUS MESSAGES (don't repeat yourself):
 {memory}
 
-NOW: Use your tools to dig deeper. Suggestions:
-- Search the web for "Backflip AI" or "mesh to CAD" to see what competitors are doing
-- Check if there are trending posts in r/onshape or r/cad that the founder should engage with
-- Look at the GitHub activity to understand what was actually shipped
-- Query the database for content drafts, leads, or market gaps if relevant
+Analyze what's ACTUALLY in this snapshot. Don't mention external facts, competitor news, or anything not listed above.
+Focus on:
+- What they shipped (or didn't) based on git and completed tasks
+- What's most urgent given the week of the plan
+- Which specific task they should do next and why
+- If they're behind on outreach or non-negotiables, call it out
+
+IMPORTANT about time estimates: pipeline/coding work takes longer than the task list shows.
+A "chamfer fix" is really 90-120 min once you include debugging. A "cut-extrude feature" is 2-4h.
+Don't tell the user they can stack 3 product tasks in 2h. Pick ONE realistic thing and finish it.
+If the task list itself underestimates, say so: "that chamfer fix is probably 2h, not 1h, plan accordingly".
 
 After your research, compose a {message_type} Telegram message.
 Your FINAL response must be ONLY the message text — nothing else. No JSON, no explanation."""
@@ -191,6 +183,7 @@ Your FINAL response must be ONLY the message text — nothing else. No JSON, no 
                     "--model", FAST_MODEL,
                     "--output-format", "json",
                     "--max-turns", str(AGENT_MAX_TURNS),
+                    "--allowedTools", "Bash", "Read", "Glob", "Grep",
                     "--append-system-prompt", AGENT_SYSTEM_PROMPT,
                 ],
                 stdin=pf,

@@ -18,7 +18,8 @@ from db.database import get_db, Task, Project, Goal, ChatMessage
 router = APIRouter(prefix="/sms", tags=["messaging"])
 
 TG_API = "https://api.telegram.org/bot"
-MAX_HISTORY = 10  # Remember last 10 messages
+MAX_HISTORY = 30  # Remember last 30 exchanges (was 10 — bot kept forgetting context)
+MAX_NOTES = 20    # Persistent mentor notes kept (was 5)
 
 
 def _save_message(db, role: str, content: str):
@@ -107,10 +108,10 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
         user = db.query(User).first()
         if user:
             existing = user.mentor_notes or ""
-            # Keep last 5 notes max
+            # Keep last MAX_NOTES notes
             notes = [n.strip() for n in existing.split("\n") if n.strip()]
             notes.append(note_text.strip())
-            notes = notes[-5:]
+            notes = notes[-MAX_NOTES:]
             user.mentor_notes = "\n".join(notes)
             db.commit()
             _send_telegram(f"got it, i'll remember that", chat_id)
@@ -143,6 +144,27 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
         else:
             lines = [f"{i+1}. {t.title} ({t.estimated_minutes}m)" for i, t in enumerate(tasks[:7])]
             _send_telegram("*Tasks:*\n" + "\n".join(lines), chat_id)
+        return JSONResponse({"ok": True})
+
+    # Command: stage N — set the current stage (drives all advice)
+    from agents.stage import get_stage, set_stage, stage_name, STAGES
+    stage_set = re.match(r"^stage\s+([1-4])\b", lower)
+    if stage_set:
+        n = int(stage_set.group(1))
+        set_stage(db, n)
+        _send_telegram(f"Stage set to {n}/4: {stage_name(n)}. Advice will match this now.", chat_id)
+        return JSONResponse({"ok": True})
+
+    # Command: stage — show current stage + the ladder
+    if lower in ("stage", "what stage", "my stage"):
+        cur = get_stage(db)
+        ladder = "\n".join(
+            f"{'> ' if i == cur else '  '}{i}. {STAGES[i]['name']}" for i in (1, 2, 3, 4)
+        )
+        _send_telegram(
+            f"*Current stage: {cur}/4 — {stage_name(cur)}*\n{ladder}\n\nText 'stage N' to change it.",
+            chat_id,
+        )
         return JSONResponse({"ok": True})
 
     # Check if they're reporting progress (e.g. "I posted on reddit", "filmed a tiktok", "did outreach")
@@ -219,26 +241,17 @@ If they're just chatting or asking questions, return {{"action": "chat"}}."""
         # Save the user's message
         _save_message(db, "user", text)
 
-        # Get marketing plan week context
-        from datetime import date as date_cls
-        _plan_start = date_cls(2026, 4, 8)
-        _days_since = (date_cls.today() - _plan_start).days
-        _week = min(4, max(1, (_days_since // 7) + 1))
-        _week_focus = {
-            1: "WEEK 1: Fix core pipeline + start outreach. PRODUCT DEV IS PRIMARY (5-6h/day). Fix holes/chamfers, scan sim, decimation, cut-extrude. Ship waitlist page. 10-15 DMs/day. Blog #1. No launches, no heavy social.",
-            2: "WEEK 2: Multi-extrusion parts + grow conversations. L-brackets, motor mounts, enclosures on degraded meshes. Demo videos. DMs with videos. Blog #2.",
-            3: "WEEK 3: Beta testing + full landing page. Harden pipeline, 10-15 beta testers, testimonials. Full landing page + pricing. Draft launch materials. Blog #3.",
-            4: "WEEK 4: Launch. PH Tuesday, Show HN, Reddit, email waitlist, engage everywhere.",
-        }
+        # Grounding: living product profile + current stage + real codebase state
+        from agents.stage import context_block
+        from agents.voice import STYLE_RULES
+        grounding = context_block(db)
 
         # Regular conversation with history
-        prompt = f"""You're texting your friend who's a solo founder building ParameshAI (mesh-to-parametric CAD for Onshape). You're their advisor. You remember your recent conversation.
+        prompt = f"""You are the operator advisor for a solo founder. You remember your recent conversation.
 
-IMPORTANT CONTEXT — they're on Day {_days_since + 1} of a 4-week plan:
-{_week_focus.get(_week, _week_focus[1])}
-Daily split: Product dev 5-6h (PRIMARY), Cold outreach 30 min, Blog 30 min, Social 10 min every other day.
-Product state: plate+extrude works, holes/chamfers close, needs multi-extrusion and cut-extrude, untested on real scans.
-Competitor: Backflip AI ($30M, still closed beta).
+{grounding}
+
+{STYLE_RULES}
 
 Their pending tasks:
 {task_list}
@@ -255,13 +268,12 @@ Their code activity today:{commit_list or ' No commits today'}
 
 They just texted: "{text}"
 
-CRITICAL RULES:
-- PRODUCT WORK IS THE PRIORITY in Weeks 1-2. Don't push marketing over coding unless they've done zero outreach.
-- You have conversation history above. REMEMBER what was said. Don't repeat yourself or contradict what you just said.
-- If they told you something isn't working or isn't ready, BELIEVE THEM. Don't push them to ship broken stuff.
-- If they ask for something specific (a script, advice on X), give them THAT thing, not a generic pep talk.
-- Text like a gen z friend. Use slang naturally (ngl, lowkey, fr, bet). No em dashes ever. No corporate speak.
-- Be real and specific to their actual situation. 2-4 sentences.
+RULES FOR THIS REPLY:
+- Match the current stage. Product work comes first when the pipeline isn't reliable yet. Do NOT push launches or outreach the stage marks off-limits.
+- You have conversation history above. Remember what was said. Don't repeat yourself or contradict what you just said.
+- If they told you something isn't working or isn't ready, believe them. Don't push them to ship broken stuff.
+- If they ask for something specific (a script, advice on X), give them that thing, not a generic answer.
+- Be specific to their actual situation. 2-4 sentences.
 
 Return ONLY the reply text."""
 
@@ -287,6 +299,6 @@ Return ONLY the reply text."""
         _send_telegram(reply, chat_id)
         _save_message(db, "mentor", reply)
     except Exception:
-        _send_telegram("yo im having a brain fart rn, try again in a bit or check the dashboard", chat_id)
+        _send_telegram("AI call failed. Try again in a bit, or check the dashboard.", chat_id)
 
     return JSONResponse({"ok": True})

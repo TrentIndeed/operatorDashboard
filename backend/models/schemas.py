@@ -351,6 +351,22 @@ class LeadOut(BaseModel):
     suggested_action: Optional[str] = None
     dm_draft: Optional[str] = None
     created_at: datetime
+    # Outreach fields
+    tier: Optional[int] = None
+    tier_reason: Optional[str] = None
+    account_summary: Optional[str] = None
+    draft_dm: Optional[str] = None
+    draft_public_reply: Optional[str] = None
+    include_demo_video: Optional[str] = None
+    post_text: Optional[str] = None
+    post_url: Optional[str] = None
+    profile_url: Optional[str] = None
+    post_date: Optional[datetime] = None
+    contacted_at: Optional[datetime] = None
+    responded_at: Optional[datetime] = None
+    follow_up_sent: Optional[bool] = False
+    notes: Optional[str] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -362,6 +378,50 @@ class LeadUpdate(BaseModel):
     sentiment: Optional[str] = None
     suggested_action: Optional[str] = None
     dm_draft: Optional[str] = None
+    draft_dm: Optional[str] = None
+    draft_public_reply: Optional[str] = None
+    tier: Optional[int] = None
+    notes: Optional[str] = None
+    contacted_at: Optional[datetime] = None
+    responded_at: Optional[datetime] = None
+    follow_up_sent: Optional[bool] = None
+
+
+class LeadCreate(BaseModel):
+    username: str
+    platform: str
+    post_url: str
+    post_text: str
+    profile_url: Optional[str] = None
+    source_url: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class OutreachMessageOut(BaseModel):
+    id: int
+    lead_id: int
+    direction: str
+    message_type: str
+    message_text: str
+    sent_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class OutreachStats(BaseModel):
+    total_leads: int = 0
+    tier1_count: int = 0
+    tier2_count: int = 0
+    tier3_count: int = 0
+    new_count: int = 0
+    contacted_count: int = 0
+    responded_count: int = 0
+    interested_count: int = 0
+    beta_count: int = 0
+    paying_count: int = 0
+    follow_ups_due: int = 0
 
 
 # --- Comment Reply Schemas ---

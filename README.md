@@ -579,34 +579,33 @@ A personal AI growth mentor that texts you 3x/day on Telegram with contextual ad
    ```
    curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://api.yourdomain.com/sms/webhook"
    ```
-9. Set up cron jobs for daily messages (on VPS):
+9. Set up the once-a-day mentor cron (on VPS):
    ```bash
    # Create the mentor script
    cat > /opt/mentor-cron.sh << 'EOF'
    #!/bin/bash
-   TYPE=$1
    curl -s -X POST http://localhost:8000/mentor/send \
      -H 'Content-Type: application/json' \
-     -d "{\"type\": \"$TYPE\"}" > /dev/null 2>&1
+     -d '{"type": "daily"}' > /dev/null 2>&1
    EOF
    chmod +x /opt/mentor-cron.sh
 
-   # Add cron jobs (times in UTC — adjust for your timezone)
-   # Eastern: 7am=11UTC, 1pm=17UTC, 9pm=01UTC
+   # ONE message a day (time in UTC — Eastern 8am = 12 UTC). Adjust to taste.
    crontab -e
-   0 11 * * * /opt/mentor-cron.sh morning
-   0 17 * * * /opt/mentor-cron.sh midday
-   0 1 * * * /opt/mentor-cron.sh evening
+   0 12 * * * /opt/mentor-cron.sh
    ```
+
+   If you're upgrading from the old 3x/day setup, remove the old
+   `morning`/`midday`/`evening` cron lines so you only get one message a day.
 
 ### How It Works
 
-The bot sends 3 messages daily:
-- **Morning (7am)**: Top priorities, what to do first
-- **Midday (1pm)**: Progress check-in, outreach reminder
-- **Evening (9pm)**: Day recap, what to think about for tomorrow
+The bot sends **one** message a day: a single operator brief covering the most
+important thing to do that day, based on your actual task list, code activity,
+and current stage. You can still text the bot any time and it replies on demand.
 
-Messages are AI-generated based on your actual task list, goals, and progress — not canned text.
+Messages are AI-generated from your real state — not canned text — in a blunt,
+no-fluff operator voice.
 
 ### Replying to the Bot
 

@@ -1,672 +1,568 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { api, Lead, OutreachStats } from "@/lib/api";
 import {
-  api,
-  Lead,
-  CommentReply,
-  WaitlistSignup,
-  WaitlistStats,
-} from "@/lib/api";
-import {
-  Users,
-  MessageCircle,
-  Mail,
-  RefreshCw,
-  Loader2,
-  Send,
-  CheckCircle,
-  XCircle,
-  Plus,
-  TrendingUp,
-  BarChart3,
-  UserPlus,
-  ArrowRight,
+  Users, RefreshCw, Loader2, Send, CheckCircle, XCircle, Plus,
+  TrendingUp, Search, ExternalLink, Copy, Sparkles, Clock,
+  MessageCircle, Target, UserCheck, Star, Filter,
 } from "lucide-react";
 
-const CATEGORIES = ["all", "hot", "warm", "curious"] as const;
+// --- Helpers ---
 
-function SectionHeader({
-  title,
-  action,
-  glow,
-}: {
-  title: string;
-  action?: React.ReactNode;
-  glow?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between mb-5">
-      <h2 className="text-label text-[var(--muted-foreground)] flex items-center gap-2">
-        {glow && (
-          <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse shadow-[0_0_8px_rgba(168,85,247,0.5)]" />
-        )}
-        {title}
-      </h2>
-      {action}
-    </div>
-  );
-}
-
-function CategoryBadge({ category }: { category: string }) {
-  const styles: Record<string, string> = {
-    hot: "bg-gradient-to-r from-red-600 to-red-500 text-white",
-    warm: "bg-gradient-to-r from-amber-600 to-amber-500 text-white",
-    curious: "bg-[var(--muted)] text-[var(--muted-foreground)]",
+function TierBadge({ tier }: { tier: number | null }) {
+  if (!tier) return null;
+  const styles: Record<number, string> = {
+    1: "bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-semibold",
+    2: "bg-gradient-to-r from-blue-600 to-blue-500 text-white",
+    3: "bg-[var(--muted)] text-[var(--muted-foreground)]",
   };
   return (
-    <span
-      className={`text-caption px-2.5 py-0.5 rounded-full ${styles[category] || styles.curious}`}
-    >
-      {category}
+    <span className={`text-caption px-2 py-0.5 rounded-full ${styles[tier] || styles[3]}`}>
+      Tier {tier}
     </span>
   );
 }
 
 function PlatformBadge({ platform }: { platform: string }) {
+  const label = platform.replace("reddit_", "r/");
   const colors: Record<string, string> = {
-    tiktok: "border-pink-500/40 text-pink-400",
-    youtube: "border-red-500/40 text-red-400",
-    twitter: "border-cyan-500/40 text-cyan-400",
     reddit: "border-orange-500/40 text-orange-400",
     linkedin: "border-blue-500/40 text-blue-400",
+    fiverr: "border-green-500/40 text-green-400",
+    upwork: "border-emerald-500/40 text-emerald-400",
+    forum: "border-purple-500/40 text-purple-400",
   };
+  const key = Object.keys(colors).find((k) => platform.toLowerCase().includes(k)) || "";
   return (
-    <span
-      className={`text-caption px-2 py-0.5 rounded-full border ${colors[platform.toLowerCase()] || "border-[var(--border)] text-[var(--muted-foreground)]"}`}
-    >
-      {platform}
+    <span className={`text-caption px-2 py-0.5 rounded-full border ${colors[key] || "border-[var(--border)] text-[var(--muted-foreground)]"}`}>
+      {label}
     </span>
   );
 }
 
-function SentimentDot({ sentiment }: { sentiment: string | null }) {
-  const color =
-    sentiment === "positive"
-      ? "bg-emerald-400"
-      : sentiment === "negative"
-        ? "bg-red-400"
-        : "bg-gray-400";
-  return <div className={`w-2 h-2 rounded-full ${color}`} title={sentiment || "neutral"} />;
-}
-
-function SourceBadge({ source }: { source: string | null }) {
-  const colors: Record<string, string> = {
-    tiktok: "bg-pink-500/20 text-pink-400",
-    youtube: "bg-red-500/20 text-red-400",
-    twitter: "bg-cyan-500/20 text-cyan-400",
-    direct: "bg-purple-500/20 text-purple-400",
-    referral: "bg-emerald-500/20 text-emerald-400",
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    new: "bg-white/10 text-white",
+    contacted: "bg-blue-500/20 text-blue-400",
+    responded: "bg-cyan-500/20 text-cyan-400",
+    interested: "bg-emerald-500/20 text-emerald-400",
+    beta_user: "bg-purple-500/20 text-purple-400",
+    paying: "bg-amber-500/20 text-amber-400",
+    not_interested: "bg-red-500/20 text-red-400",
+    no_response: "bg-gray-500/20 text-gray-400",
+    skip: "bg-gray-500/20 text-gray-400",
   };
-  const s = (source || "direct").toLowerCase();
   return (
-    <span className={`text-caption px-2 py-0.5 rounded-full ${colors[s] || "bg-[var(--muted)] text-[var(--muted-foreground)]"}`}>
-      {source || "direct"}
+    <span className={`text-caption px-2 py-0.5 rounded-full ${styles[status] || styles.new}`}>
+      {status.replace("_", " ")}
     </span>
   );
 }
 
-export default function Page() {
+function timeAgo(dateStr: string | null) {
+  if (!dateStr) return "";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const hours = Math.floor(diff / 3600000);
+  if (hours < 1) return "just now";
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function StatCard({ label, value, icon: Icon, color }: { label: string; value: number | string; icon: any; color: string }) {
+  return (
+    <div className="flex items-center gap-3 p-3">
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${color}`}>
+        <Icon className="w-4 h-4" />
+      </div>
+      <div>
+        <div className="text-subtitle text-white">{value}</div>
+        <div className="text-caption text-[var(--muted-foreground)]">{label}</div>
+      </div>
+    </div>
+  );
+}
+
+// --- Main Page ---
+
+export default function OutreachPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [replies, setReplies] = useState<CommentReply[]>([]);
-  const [waitlist, setWaitlist] = useState<WaitlistSignup[]>([]);
-  const [waitlistStats, setWaitlistStats] = useState<WaitlistStats | null>(null);
+  const [stats, setStats] = useState<OutreachStats | null>(null);
+  const [followUps, setFollowUps] = useState<Lead[]>([]);
+  const [selected, setSelected] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [category, setCategory] = useState<string>("all");
-  const [generatingDM, setGeneratingDM] = useState<number | null>(null);
-  const [generatingReply, setGeneratingReply] = useState<number | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterTier, setFilterTier] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newSignup, setNewSignup] = useState({ email: "", name: "", source: "" });
+  const [newLead, setNewLead] = useState({ username: "", platform: "linkedin", post_url: "", post_text: "", profile_url: "", notes: "" });
+  const [editDm, setEditDm] = useState("");
+  const [editReply, setEditReply] = useState("");
+  const [copied, setCopied] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
-      const cat = category === "all" ? undefined : category;
-      const [leadsData, repliesData, waitlistData, statsData] = await Promise.all([
-        api.getLeads(cat),
-        api.getCommentReplies(),
-        api.getWaitlist(),
-        api.getWaitlistStats(),
+      const params: any = {};
+      if (filterTier) params.tier = filterTier;
+      if (filterStatus !== "all") params.status = filterStatus;
+      if (searchQuery) params.search = searchQuery;
+      const [leadsData, statsData, followUpData] = await Promise.all([
+        api.outreachLeads(params),
+        api.outreachStats(),
+        api.outreachFollowUps(),
       ]);
       setLeads(leadsData);
-      setReplies(repliesData);
-      setWaitlist(waitlistData);
-      setWaitlistStats(statsData);
+      setStats(statsData);
+      setFollowUps(followUpData);
     } catch {
-      setError("Cannot reach backend. Make sure FastAPI is running on port 8000.");
+      // silently fail
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterStatus, filterTier, searchQuery]);
+
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    load();
-  }, [category]);
+    if (selected) {
+      setEditDm(selected.draft_dm || selected.dm_draft || "");
+      setEditReply(selected.draft_public_reply || "");
+    }
+  }, [selected]);
 
-  const handleGenerateDM = async (id: number) => {
-    setGeneratingDM(id);
+  const handleScan = async () => {
+    setScanning(true);
     try {
-      const updated = await api.generateDM(id);
-      setLeads((prev) => prev.map((l) => (l.id === id ? updated : l)));
+      await api.scanSignals();
+      // Poll for results after 15 seconds
+      setTimeout(() => { load(); setScanning(false); }, 15000);
     } catch {
-      /* ignore */
-    } finally {
-      setGeneratingDM(null);
+      setScanning(false);
     }
   };
 
-  const handleUpdateLead = async (id: number, data: Partial<Lead>) => {
+  const handleDraft = async (id: number) => {
+    setDrafting(true);
     try {
-      const updated = await api.updateLead(id, data);
-      if (data.status === "dismissed") {
-        setLeads((prev) => prev.filter((l) => l.id !== id));
-      } else {
+      await api.draftMessages(id);
+      setTimeout(async () => {
+        const updated = await api.outreachLead(id);
         setLeads((prev) => prev.map((l) => (l.id === id ? updated : l)));
-      }
+        if (selected?.id === id) setSelected(updated);
+        setDrafting(false);
+      }, 10000);
     } catch {
-      /* ignore */
+      setDrafting(false);
     }
   };
 
-  const handleGenerateReply = async (id: number) => {
-    setGeneratingReply(id);
+  const handleStatus = async (id: number, status: string) => {
     try {
-      const updated = await api.generateReply(id);
-      setReplies((prev) => prev.map((r) => (r.id === id ? updated : r)));
-    } catch {
-      /* ignore */
-    } finally {
-      setGeneratingReply(null);
-    }
-  };
-
-  const handleUpdateReply = async (id: number, data: Partial<CommentReply>) => {
-    try {
-      const updated = await api.updateCommentReply(id, data);
-      if (data.status === "skipped" || data.status === "approved") {
-        setReplies((prev) => prev.filter((r) => r.id !== id));
+      if (status === "contacted") {
+        // Save current DM text before marking contacted
+        if (editDm) {
+          await api.updateOutreachLead(id, { draft_dm: editDm } as any);
+        }
+        const updated = await api.markContacted(id);
+        setLeads((prev) => prev.map((l) => (l.id === id ? updated : l)));
+        if (selected?.id === id) setSelected(updated);
       } else {
-        setReplies((prev) => prev.map((r) => (r.id === id ? updated : r)));
+        const updated = await api.updateOutreachLead(id, { status } as any);
+        setLeads((prev) => prev.map((l) => (l.id === id ? updated : l)));
+        if (selected?.id === id) setSelected(updated);
       }
-    } catch {
-      /* ignore */
-    }
+      if (stats) {
+        const s = await api.outreachStats();
+        setStats(s);
+      }
+    } catch { /* ignore */ }
   };
 
-  const handleAddSignup = async () => {
-    if (!newSignup.email) return;
+  const handleCopy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(label);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const handleAddLead = async () => {
+    if (!newLead.username || !newLead.post_url || !newLead.post_text) return;
     try {
-      const signup = await api.addWaitlistSignup({
-        email: newSignup.email,
-        name: newSignup.name || undefined,
-        source: newSignup.source || undefined,
-      });
-      setWaitlist((prev) => [signup, ...prev]);
-      setWaitlistStats((prev) =>
-        prev ? { ...prev, total: prev.total + 1, active: prev.active + 1 } : prev
-      );
-      setNewSignup({ email: "", name: "", source: "" });
+      const created = await api.createOutreachLead(newLead);
+      setLeads((prev) => [created, ...prev]);
       setShowAddForm(false);
-    } catch {
-      /* ignore */
-    }
+      setNewLead({ username: "", platform: "linkedin", post_url: "", post_text: "", profile_url: "", notes: "" });
+    } catch { /* ignore */ }
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
-          <span className="text-body-sm text-[var(--muted-foreground)]">
-            Loading leads...
-          </span>
-        </div>
+        <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
       </div>
     );
   }
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen gap-5">
-        <div className="text-subtitle text-pink-400">{error}</div>
-        <button onClick={load} className="btn-pill btn-pill-primary flex items-center gap-2">
-          <RefreshCw className="w-4 h-4" /> Retry
-        </button>
-      </div>
-    );
-  }
-
-  const conversionRate =
-    waitlistStats && waitlistStats.total > 0
-      ? ((waitlistStats.converted / waitlistStats.total) * 100).toFixed(1)
-      : "0";
 
   return (
-    <div className="p-4 sm:p-6 lg:p-10 space-y-6 sm:space-y-8">
+    <div className="h-[calc(100vh-56px)] lg:h-screen flex flex-col">
       {/* Header */}
-      <div className="flex items-end justify-between">
+      <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
         <div>
-          <h1 className="text-heading text-white">Outreach & Networking</h1>
-          <p className="text-body text-[var(--muted-foreground)] mt-1">
-            Detect, engage, and convert your audience
+          <h1 className="text-heading text-white">Outreach Command Center</h1>
+          <p className="text-body-sm text-[var(--muted-foreground)]">
+            Find leads, draft messages, track conversations
           </p>
         </div>
-        <button onClick={load} className="btn-pill btn-pill-outline flex items-center gap-2">
-          <RefreshCw className="w-4 h-4" /> Refresh
-        </button>
-      </div>
-
-      {/* Category filter pills */}
-      <div className="flex gap-2">
-        {CATEGORIES.map((cat) => (
+        <div className="flex items-center gap-2">
           <button
-            key={cat}
-            onClick={() => setCategory(cat)}
-            className={`btn-pill btn-pill-sm capitalize ${
-              category === cat ? "btn-pill-primary" : "btn-pill-outline"
-            }`}
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="btn-pill btn-pill-sm btn-pill-outline flex items-center gap-1.5"
           >
-            {cat}
+            <Plus className="w-3.5 h-3.5" /> Add Lead
           </button>
-        ))}
-      </div>
-
-      {/* Waitlist Stats Bar */}
-      {waitlistStats && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-          <div className="relative overflow-hidden rounded-2xl p-6 bg-gradient-to-br from-purple-600 via-purple-700 to-violet-800">
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-2">
-                <UserPlus className="w-4 h-4 text-white/80" />
-                <span className="text-label text-white/80">Total Signups</span>
-              </div>
-              <div className="text-display text-white" style={{ fontSize: "36px" }}>
-                {waitlistStats.total}
-              </div>
-              <div className="text-body-sm text-white/70 mt-1">
-                {waitlistStats.active} active
-              </div>
-            </div>
-            <div className="absolute top-0 right-0 w-40 h-40 rounded-full bg-white/10 blur-3xl -translate-y-10 translate-x-10" />
-          </div>
-
-          <div className="elevated-card rounded-2xl p-6">
-            <div className="flex items-center gap-2 mb-3">
-              <BarChart3 className="w-4 h-4 text-purple-400" />
-              <span className="text-label text-[var(--muted-foreground)]">Sources</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(waitlistStats.by_source).map(([source, count]) => (
-                <div key={source} className="flex items-center gap-1.5">
-                  <SourceBadge source={source} />
-                  <span className="text-body-sm text-white font-semibold">{count}</span>
-                </div>
-              ))}
-              {Object.keys(waitlistStats.by_source).length === 0 && (
-                <span className="text-body-sm text-[var(--muted-foreground)]">No data yet</span>
-              )}
-            </div>
-          </div>
-
-          <div className="elevated-card rounded-2xl p-6">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="w-4 h-4 text-emerald-400" />
-              <span className="text-label text-[var(--muted-foreground)]">Conversion Rate</span>
-            </div>
-            <div className="text-display text-white" style={{ fontSize: "36px" }}>
-              {conversionRate}%
-            </div>
-            <div className="text-body-sm text-[var(--muted-foreground)] mt-1">
-              {waitlistStats.converted} converted
-            </div>
-          </div>
+          <button
+            onClick={handleScan}
+            disabled={scanning}
+            className="btn-pill btn-pill-sm btn-pill-primary flex items-center gap-1.5 disabled:opacity-50"
+          >
+            {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+            {scanning ? "Scanning..." : "Scan Reddit"}
+          </button>
+          <button onClick={load} className="btn-pill btn-pill-sm btn-pill-outline">
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
         </div>
-      )}
-
-      {/* Main content grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-8">
-        {/* Left: Lead Detection Queue */}
-        <section>
-          <SectionHeader
-            title={`Lead Detection Queue (${leads.length})`}
-            glow
-          />
-          <div className="space-y-4">
-            <AnimatePresence initial={false}>
-              {leads.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="py-12 text-center elevated-card rounded-2xl"
-                >
-                  <Users className="w-12 h-12 text-purple-400/30 mx-auto mb-4" />
-                  <p className="text-body text-[var(--muted-foreground)]">
-                    No leads detected yet. They will appear here as your audience grows.
-                  </p>
-                </motion.div>
-              ) : (
-                leads.map((lead) => (
-                  <motion.div
-                    key={lead.id}
-                    layout
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    className="glass-card rounded-2xl p-5 space-y-3"
-                  >
-                    {/* Top row: badges */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <CategoryBadge category={lead.category} />
-                      <PlatformBadge platform={lead.platform} />
-                      <SentimentDot sentiment={lead.sentiment} />
-                      <span className="text-body-sm text-white font-medium ml-1">
-                        @{lead.username}
-                      </span>
-                      <span className="text-caption text-[var(--muted-foreground)] ml-auto">
-                        {new Date(lead.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-
-                    {/* Message */}
-                    {lead.message && (
-                      <p className="text-body-sm text-[var(--muted-foreground)] italic border-l-2 border-purple-500/30 pl-3">
-                        &ldquo;{lead.message}&rdquo;
-                      </p>
-                    )}
-
-                    {/* Suggested action */}
-                    {lead.suggested_action && (
-                      <div className="flex items-center gap-2">
-                        <ArrowRight className="w-3.5 h-3.5 text-purple-400" />
-                        <span className="text-body-sm text-purple-300">{lead.suggested_action}</span>
-                      </div>
-                    )}
-
-                    {/* DM Draft */}
-                    {lead.dm_draft && (
-                      <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3">
-                        <div className="text-caption text-purple-400 mb-1.5">DM Draft</div>
-                        <textarea
-                          className="w-full bg-transparent text-body-sm text-white resize-none outline-none"
-                          rows={3}
-                          defaultValue={lead.dm_draft}
-                          onBlur={(e) =>
-                            handleUpdateLead(lead.id, { dm_draft: e.target.value })
-                          }
-                        />
-                      </div>
-                    )}
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 pt-1">
-                      <button
-                        onClick={() => handleGenerateDM(lead.id)}
-                        disabled={generatingDM === lead.id}
-                        className="btn-pill btn-pill-sm btn-pill-primary flex items-center gap-1.5 disabled:opacity-50"
-                      >
-                        {generatingDM === lead.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Send className="w-3.5 h-3.5" />
-                        )}
-                        Generate DM
-                      </button>
-                      <button
-                        onClick={() => handleUpdateLead(lead.id, { status: "contacted" })}
-                        className="btn-pill btn-pill-sm flex items-center gap-1.5 border border-emerald-500/40 text-emerald-400 bg-transparent hover:bg-emerald-500/10"
-                      >
-                        <CheckCircle className="w-3.5 h-3.5" />
-                        Mark Contacted
-                      </button>
-                      <button
-                        onClick={() => handleUpdateLead(lead.id, { status: "dismissed" })}
-                        className="btn-pill btn-pill-sm flex items-center gap-1.5 border border-[var(--border)] text-[var(--muted-foreground)] bg-transparent hover:bg-[var(--muted)]"
-                      >
-                        <XCircle className="w-3.5 h-3.5" />
-                        Dismiss
-                      </button>
-                    </div>
-                  </motion.div>
-                ))
-              )}
-            </AnimatePresence>
-          </div>
-        </section>
-
-        {/* Right: Comment Replies */}
-        <section>
-          <SectionHeader title={`Pending Replies (${replies.length})`} />
-          <div className="space-y-4">
-            <AnimatePresence initial={false}>
-              {replies.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="py-10 text-center elevated-card rounded-2xl"
-                >
-                  <MessageCircle className="w-10 h-10 text-purple-400/30 mx-auto mb-3" />
-                  <p className="text-body-sm text-[var(--muted-foreground)]">
-                    No pending replies.
-                  </p>
-                </motion.div>
-              ) : (
-                replies.map((reply) => (
-                  <motion.div
-                    key={reply.id}
-                    layout
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    className="glass-card rounded-2xl p-4 space-y-3"
-                  >
-                    <div className="flex items-center gap-2">
-                      <PlatformBadge platform={reply.platform} />
-                      {reply.username && (
-                        <span className="text-body-sm text-white/70">@{reply.username}</span>
-                      )}
-                    </div>
-
-                    <p className="text-body-sm text-[var(--muted-foreground)] italic border-l-2 border-[var(--border)] pl-3">
-                      &ldquo;{reply.original_comment}&rdquo;
-                    </p>
-
-                    {reply.reply_draft ? (
-                      <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3">
-                        <div className="text-caption text-purple-400 mb-1.5">Reply Draft</div>
-                        <textarea
-                          className="w-full bg-transparent text-body-sm text-white resize-none outline-none"
-                          rows={2}
-                          defaultValue={reply.reply_draft}
-                          onBlur={(e) =>
-                            handleUpdateReply(reply.id, { reply_draft: e.target.value })
-                          }
-                        />
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleGenerateReply(reply.id)}
-                        disabled={generatingReply === reply.id}
-                        className="btn-pill btn-pill-sm btn-pill-primary flex items-center gap-1.5 disabled:opacity-50"
-                      >
-                        {generatingReply === reply.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Send className="w-3.5 h-3.5" />
-                        )}
-                        Generate Reply
-                      </button>
-                    )}
-
-                    {reply.reply_draft && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleUpdateReply(reply.id, { status: "approved" })}
-                          className="btn-pill btn-pill-sm flex items-center gap-1.5 border border-emerald-500/40 text-emerald-400 bg-transparent hover:bg-emerald-500/10"
-                        >
-                          <CheckCircle className="w-3.5 h-3.5" />
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => handleUpdateReply(reply.id, { status: "skipped" })}
-                          className="btn-pill btn-pill-sm flex items-center gap-1.5 border border-[var(--border)] text-[var(--muted-foreground)] bg-transparent hover:bg-[var(--muted)]"
-                        >
-                          Skip
-                        </button>
-                      </div>
-                    )}
-                  </motion.div>
-                ))
-              )}
-            </AnimatePresence>
-          </div>
-        </section>
       </div>
 
-      {/* Waitlist Management */}
-      <section>
-        <SectionHeader
-          title="Waitlist"
-          action={
-            <button
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="btn-pill btn-pill-sm btn-pill-primary flex items-center gap-1.5"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Signup
-            </button>
-          }
-        />
-
-        {/* Add signup form */}
-        <AnimatePresence>
-          {showAddForm && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="elevated-card rounded-2xl p-5 mb-5 flex flex-wrap items-end gap-4">
-                <div className="flex-1 min-w-[200px]">
-                  <label className="text-caption text-[var(--muted-foreground)] mb-1 block">
-                    Email *
-                  </label>
-                  <input
-                    type="email"
-                    value={newSignup.email}
-                    onChange={(e) => setNewSignup({ ...newSignup, email: e.target.value })}
-                    className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-body-sm text-white outline-none focus:border-purple-500"
-                    placeholder="user@example.com"
-                  />
-                </div>
-                <div className="flex-1 min-w-[160px]">
-                  <label className="text-caption text-[var(--muted-foreground)] mb-1 block">
-                    Name
-                  </label>
-                  <input
-                    type="text"
-                    value={newSignup.name}
-                    onChange={(e) => setNewSignup({ ...newSignup, name: e.target.value })}
-                    className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-body-sm text-white outline-none focus:border-purple-500"
-                    placeholder="Jane Doe"
-                  />
-                </div>
-                <div className="flex-1 min-w-[140px]">
-                  <label className="text-caption text-[var(--muted-foreground)] mb-1 block">
-                    Source
-                  </label>
-                  <input
-                    type="text"
-                    value={newSignup.source}
-                    onChange={(e) => setNewSignup({ ...newSignup, source: e.target.value })}
-                    className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-body-sm text-white outline-none focus:border-purple-500"
-                    placeholder="tiktok, twitter..."
-                  />
-                </div>
-                <button
-                  onClick={handleAddSignup}
-                  disabled={!newSignup.email}
-                  className="btn-pill btn-pill-primary flex items-center gap-1.5 disabled:opacity-40"
-                >
-                  <Mail className="w-4 h-4" />
-                  Add
+      {/* Manual Add Form */}
+      <AnimatePresence>
+        {showAddForm && (
+          <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden border-b border-[var(--border)]">
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <input value={newLead.username} onChange={(e) => setNewLead({ ...newLead, username: e.target.value })}
+                className="bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-body-sm text-white outline-none focus:border-purple-500"
+                placeholder="Username *" />
+              <select value={newLead.platform} onChange={(e) => setNewLead({ ...newLead, platform: e.target.value })}
+                className="bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-body-sm text-white outline-none focus:border-purple-500">
+                <option value="linkedin">LinkedIn</option>
+                <option value="fiverr">Fiverr</option>
+                <option value="upwork">Upwork</option>
+                <option value="reddit">Reddit</option>
+                <option value="onshape_forum">Onshape Forum</option>
+              </select>
+              <input value={newLead.post_url} onChange={(e) => setNewLead({ ...newLead, post_url: e.target.value })}
+                className="bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-body-sm text-white outline-none focus:border-purple-500"
+                placeholder="Post URL *" />
+              <textarea value={newLead.post_text} onChange={(e) => setNewLead({ ...newLead, post_text: e.target.value })}
+                className="sm:col-span-2 bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-body-sm text-white outline-none focus:border-purple-500 resize-none"
+                rows={2} placeholder="Paste their post text *" />
+              <div className="flex items-end gap-2">
+                <input value={newLead.profile_url} onChange={(e) => setNewLead({ ...newLead, profile_url: e.target.value })}
+                  className="flex-1 bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-body-sm text-white outline-none focus:border-purple-500"
+                  placeholder="Profile URL" />
+                <button onClick={handleAddLead} className="btn-pill btn-pill-primary flex items-center gap-1.5 whitespace-nowrap">
+                  <Plus className="w-3.5 h-3.5" /> Add
                 </button>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        {/* Waitlist table */}
-        <div className="elevated-card rounded-2xl overflow-hidden">
-          {waitlist.length === 0 ? (
-            <div className="py-12 text-center">
-              <Mail className="w-10 h-10 text-purple-400/30 mx-auto mb-3" />
-              <p className="text-body-sm text-[var(--muted-foreground)]">
-                No waitlist signups yet.
+      {/* Three-panel layout */}
+      <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr_300px] flex-1 overflow-hidden">
+
+        {/* LEFT: Signal Feed */}
+        <div className="border-r border-[var(--border)] flex flex-col overflow-hidden">
+          {/* Filters */}
+          <div className="p-3 border-b border-[var(--border)] space-y-2">
+            <div className="flex gap-1.5 flex-wrap">
+              {["all", "new", "contacted", "responded", "interested"].map((s) => (
+                <button key={s} onClick={() => setFilterStatus(s)}
+                  className={`text-caption px-2 py-0.5 rounded-full capitalize ${filterStatus === s ? "bg-purple-500/30 text-purple-300 border border-purple-500/40" : "bg-[var(--muted)] text-[var(--muted-foreground)] border border-transparent"}`}>
+                  {s}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1.5">
+              {[null, 1, 2, 3].map((t) => (
+                <button key={String(t)} onClick={() => setFilterTier(t)}
+                  className={`text-caption px-2 py-0.5 rounded-full ${filterTier === t ? "bg-purple-500/30 text-purple-300 border border-purple-500/40" : "bg-[var(--muted)] text-[var(--muted-foreground)] border border-transparent"}`}>
+                  {t === null ? "All tiers" : `Tier ${t}`}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Lead list */}
+          <div className="flex-1 overflow-y-auto">
+            {leads.length === 0 ? (
+              <div className="p-8 text-center">
+                <Users className="w-10 h-10 text-purple-400/30 mx-auto mb-3" />
+                <p className="text-body-sm text-[var(--muted-foreground)]">
+                  No leads yet. Click &quot;Scan Reddit&quot; to find people.
+                </p>
+              </div>
+            ) : (
+              leads.map((lead) => (
+                <button key={lead.id} onClick={() => setSelected(lead)}
+                  className={`w-full text-left p-3 border-b border-[var(--border)] hover:bg-white/[0.03] transition-colors ${selected?.id === lead.id ? "bg-purple-500/10 border-l-2 border-l-purple-500" : ""}`}>
+                  <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                    <TierBadge tier={lead.tier} />
+                    <PlatformBadge platform={lead.platform} />
+                    <StatusBadge status={lead.status} />
+                  </div>
+                  <div className="text-body-sm text-white font-medium truncate">
+                    @{lead.username}
+                  </div>
+                  <p className="text-caption text-[var(--muted-foreground)] line-clamp-2 mt-0.5">
+                    {lead.post_text || lead.message || "No post text"}
+                  </p>
+                  <span className="text-caption text-[var(--muted-foreground)] opacity-60">
+                    {timeAgo(lead.post_date || lead.created_at)}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* CENTER: Lead Detail */}
+        <div className="overflow-y-auto">
+          {!selected ? (
+            <div className="flex flex-col items-center justify-center h-full text-center p-8">
+              <Target className="w-16 h-16 text-purple-400/20 mb-4" />
+              <p className="text-body text-[var(--muted-foreground)]">
+                Select a lead from the list to see details
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-[var(--border)]">
-                    <th className="text-caption text-[var(--muted-foreground)] px-5 py-3">
-                      Email
-                    </th>
-                    <th className="text-caption text-[var(--muted-foreground)] px-5 py-3">
-                      Name
-                    </th>
-                    <th className="text-caption text-[var(--muted-foreground)] px-5 py-3">
-                      Source
-                    </th>
-                    <th className="text-caption text-[var(--muted-foreground)] px-5 py-3">
-                      Date
-                    </th>
-                    <th className="text-caption text-[var(--muted-foreground)] px-5 py-3">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {waitlist.map((signup) => (
-                    <tr
-                      key={signup.id}
-                      className="border-b border-[var(--border)] last:border-0 hover:bg-white/[0.02] transition-colors"
-                    >
-                      <td className="text-body-sm text-white px-5 py-3 font-mono">
-                        {signup.email}
-                      </td>
-                      <td className="text-body-sm text-[var(--muted-foreground)] px-5 py-3">
-                        {signup.name || "-"}
-                      </td>
-                      <td className="px-5 py-3">
-                        <SourceBadge source={signup.source} />
-                      </td>
-                      <td className="text-body-sm text-[var(--muted-foreground)] px-5 py-3">
-                        {new Date(signup.signed_up_at).toLocaleDateString()}
-                      </td>
-                      <td className="px-5 py-3">
-                        <span
-                          className={`text-caption px-2 py-0.5 rounded-full ${
-                            signup.status === "active"
-                              ? "bg-emerald-500/20 text-emerald-400"
-                              : signup.status === "converted"
-                                ? "bg-purple-500/20 text-purple-400"
-                                : "bg-[var(--muted)] text-[var(--muted-foreground)]"
-                          }`}
-                        >
-                          {signup.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="p-5 space-y-5">
+              {/* Header */}
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <TierBadge tier={selected.tier} />
+                    <PlatformBadge platform={selected.platform} />
+                    <StatusBadge status={selected.status} />
+                  </div>
+                  <h2 className="text-subtitle text-white">@{selected.username}</h2>
+                  {selected.tier_reason && (
+                    <p className="text-caption text-[var(--muted-foreground)] mt-0.5">{selected.tier_reason}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {selected.post_url && (
+                    <a href={selected.post_url} target="_blank" rel="noopener noreferrer"
+                      className="btn-pill btn-pill-sm btn-pill-outline flex items-center gap-1.5">
+                      <ExternalLink className="w-3.5 h-3.5" /> View Post
+                    </a>
+                  )}
+                  {selected.profile_url && (
+                    <a href={selected.profile_url} target="_blank" rel="noopener noreferrer"
+                      className="btn-pill btn-pill-sm btn-pill-outline flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5" /> Profile
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Post text */}
+              <div className="glass-card rounded-xl p-4">
+                <div className="text-caption text-[var(--muted-foreground)] mb-2">Original Post</div>
+                <p className="text-body-sm text-white whitespace-pre-wrap">
+                  {selected.post_text || selected.message || "No post text available"}
+                </p>
+              </div>
+
+              {/* Account summary */}
+              {selected.account_summary && (
+                <div className="elevated-card rounded-xl p-4">
+                  <div className="text-caption text-purple-400 mb-2">About This Person</div>
+                  <p className="text-body-sm text-[var(--muted-foreground)] whitespace-pre-wrap">
+                    {selected.account_summary}
+                  </p>
+                </div>
+              )}
+
+              {/* Demo video recommendation */}
+              {selected.include_demo_video && (
+                <div className={`rounded-xl p-3 text-body-sm ${selected.include_demo_video.toLowerCase().startsWith("yes") ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300" : "bg-[var(--muted)] text-[var(--muted-foreground)]"}`}>
+                  Include demo video: {selected.include_demo_video}
+                </div>
+              )}
+
+              {/* DM Draft */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-caption text-purple-400">Draft DM</span>
+                  <div className="flex gap-1.5">
+                    <button onClick={() => handleDraft(selected.id)} disabled={drafting}
+                      className="text-caption text-purple-400 hover:text-purple-300 flex items-center gap-1">
+                      {drafting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                      {drafting ? "Generating..." : "Regenerate"}
+                    </button>
+                    <button onClick={() => handleCopy(editDm, "dm")}
+                      className="text-caption text-[var(--muted-foreground)] hover:text-white flex items-center gap-1">
+                      <Copy className="w-3 h-3" />
+                      {copied === "dm" ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  value={editDm}
+                  onChange={(e) => setEditDm(e.target.value)}
+                  onBlur={() => {
+                    if (selected && editDm !== (selected.draft_dm || "")) {
+                      api.updateOutreachLead(selected.id, { draft_dm: editDm } as any);
+                    }
+                  }}
+                  className="w-full bg-purple-500/5 border border-purple-500/20 rounded-xl p-3 text-body-sm text-white resize-none outline-none focus:border-purple-500/40"
+                  rows={4}
+                  placeholder="No DM draft yet. Click Regenerate to create one."
+                />
+              </div>
+
+              {/* Public Reply Draft */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-caption text-cyan-400">Draft Public Reply</span>
+                  <button onClick={() => handleCopy(editReply, "reply")}
+                    className="text-caption text-[var(--muted-foreground)] hover:text-white flex items-center gap-1">
+                    <Copy className="w-3 h-3" />
+                    {copied === "reply" ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+                <textarea
+                  value={editReply}
+                  onChange={(e) => setEditReply(e.target.value)}
+                  onBlur={() => {
+                    if (selected && editReply !== (selected.draft_public_reply || "")) {
+                      api.updateOutreachLead(selected.id, { draft_public_reply: editReply } as any);
+                    }
+                  }}
+                  className="w-full bg-cyan-500/5 border border-cyan-500/20 rounded-xl p-3 text-body-sm text-white resize-none outline-none focus:border-cyan-500/40"
+                  rows={4}
+                  placeholder="No public reply draft yet."
+                />
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-2">
+                <span className="text-caption text-[var(--muted-foreground)]">Notes</span>
+                <textarea
+                  defaultValue={selected.notes || ""}
+                  onBlur={(e) => api.updateOutreachLead(selected.id, { notes: e.target.value } as any)}
+                  className="w-full bg-[var(--background)] border border-[var(--border)] rounded-xl p-3 text-body-sm text-white resize-none outline-none focus:border-purple-500/40"
+                  rows={2}
+                  placeholder="Personal notes about this lead..."
+                />
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-[var(--border)]">
+                {selected.status === "new" && (
+                  <>
+                    <button onClick={() => handleStatus(selected.id, "contacted")}
+                      className="btn-pill btn-pill-sm flex items-center gap-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30">
+                      <CheckCircle className="w-3.5 h-3.5" /> Mark Contacted
+                    </button>
+                    <button onClick={() => handleStatus(selected.id, "skip")}
+                      className="btn-pill btn-pill-sm flex items-center gap-1.5 border border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]">
+                      <XCircle className="w-3.5 h-3.5" /> Skip
+                    </button>
+                  </>
+                )}
+                {selected.status === "contacted" && (
+                  <>
+                    <button onClick={() => handleStatus(selected.id, "responded")}
+                      className="btn-pill btn-pill-sm flex items-center gap-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30">
+                      <MessageCircle className="w-3.5 h-3.5" /> Responded
+                    </button>
+                    <button onClick={() => handleStatus(selected.id, "no_response")}
+                      className="btn-pill btn-pill-sm flex items-center gap-1.5 border border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]">
+                      No Response
+                    </button>
+                  </>
+                )}
+                {selected.status === "responded" && (
+                  <button onClick={() => handleStatus(selected.id, "interested")}
+                    className="btn-pill btn-pill-sm flex items-center gap-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30">
+                    <Star className="w-3.5 h-3.5" /> Interested
+                  </button>
+                )}
+                {selected.status === "interested" && (
+                  <button onClick={() => handleStatus(selected.id, "beta_user")}
+                    className="btn-pill btn-pill-sm flex items-center gap-1.5 bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30">
+                    <UserCheck className="w-3.5 h-3.5" /> Add to Beta
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
-      </section>
+
+        {/* RIGHT: Stats & Follow-ups */}
+        <div className="border-l border-[var(--border)] overflow-y-auto hidden xl:block">
+          {stats && (
+            <div className="border-b border-[var(--border)]">
+              <div className="p-3 text-caption text-[var(--muted-foreground)] font-semibold uppercase tracking-wider">
+                Pipeline
+              </div>
+              <div className="grid grid-cols-2 gap-0">
+                <StatCard label="Total" value={stats.total_leads} icon={Users} color="bg-purple-500/20 text-purple-400" />
+                <StatCard label="Tier 1" value={stats.tier1_count} icon={Star} color="bg-amber-500/20 text-amber-400" />
+                <StatCard label="New" value={stats.new_count} icon={Target} color="bg-white/10 text-white" />
+                <StatCard label="Contacted" value={stats.contacted_count} icon={Send} color="bg-blue-500/20 text-blue-400" />
+                <StatCard label="Responded" value={stats.responded_count} icon={MessageCircle} color="bg-cyan-500/20 text-cyan-400" />
+                <StatCard label="Interested" value={stats.interested_count} icon={TrendingUp} color="bg-emerald-500/20 text-emerald-400" />
+                <StatCard label="Beta" value={stats.beta_count} icon={UserCheck} color="bg-purple-500/20 text-purple-400" />
+                <StatCard label="Paying" value={stats.paying_count} icon={Star} color="bg-amber-500/20 text-amber-400" />
+              </div>
+              {stats.follow_ups_due > 0 && (
+                <div className="px-3 pb-3">
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 text-center">
+                    <span className="text-caption text-amber-400">
+                      {stats.follow_ups_due} follow-up{stats.follow_ups_due > 1 ? "s" : ""} due
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Follow-up queue */}
+          <div className="p-3">
+            <div className="text-caption text-[var(--muted-foreground)] font-semibold uppercase tracking-wider mb-3">
+              Follow-up Queue
+            </div>
+            {followUps.length === 0 ? (
+              <p className="text-caption text-[var(--muted-foreground)] text-center py-4">
+                No follow-ups due
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {followUps.map((lead) => (
+                  <button key={lead.id} onClick={() => setSelected(lead)}
+                    className="w-full text-left p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20 hover:bg-amber-500/10 transition-colors">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <Clock className="w-3 h-3 text-amber-400" />
+                      <span className="text-caption text-white">@{lead.username}</span>
+                      <PlatformBadge platform={lead.platform} />
+                    </div>
+                    <p className="text-caption text-[var(--muted-foreground)]">
+                      Contacted {timeAgo(lead.contacted_at)}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

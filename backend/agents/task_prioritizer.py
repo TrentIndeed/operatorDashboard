@@ -25,75 +25,64 @@ TASK MIX:
 - 0-1 CONTENT task (blog writing, video recording — 30 min)
 - Do NOT generate social media tasks unless it's every-other-day and the user has time
 
-WEEK-SPECIFIC TASKS (check marketing_plan_week in context):
+REALISTIC TIME ESTIMATES (CRITICAL — these are HARD MINIMUMS):
+Product/pipeline tasks take LONGER than you'd think. These are the MINIMUMS:
+- Bug fix in pipeline (chamfer, RANSAC tuning, plane fitting): MINIMUM 90 min, typically 120-180
+- New feature (cut-extrude, multi-extrusion, decimation, scan sim): MINIMUM 120 min, typically 180-240
+- Writing a new test script: MINIMUM 60 min, typically 90-120
+- Debugging a test failure: MINIMUM 60 min
+- Integration work (wiring a new stage into the pipeline): MINIMUM 90 min
+- Reverse-engineering why something broke: MINIMUM 60 min
 
-WEEK 1 — Fix Core Pipeline + Start Outreach:
-Product tasks:
-- "Fix hole detection (RANSAC cylinder fitting) on clean test meshes"
-- "Fix chamfer/fillet detection on plates"
-- "Build scan simulation script using lidar, industrial, and ai_mesh presets"
-- "Run degraded meshes through pipeline, fix noise tolerance in RANSAC/plane fitting"
-- "Add Open3D/trimesh decimation as first pipeline stage (target 20-50K triangles)"
-- "Implement cut-extrude: parallel plane pair detection for pockets/channels"
-- "Test: U-channel and open-top box should reconstruct as extrude + cut-extrude"
-Marketing tasks:
-- "Ship minimal waitlist page: one-liner, GIF of plate conversion, email signup, 'How did you hear?' field"
-- "Cold outreach: search Onshape forum, r/onshape, r/cad, r/3Dprinting, LinkedIn for mesh frustration posts"
-- "DM 10-15 people who posted about mesh/STL/Onshape problems"
-- "Reply to 2-3 forum threads with genuine helpful answers (no self-promo)"
-- "Write blog post #1 targeting 'convert STL to parametric CAD' (800-1200 words)"
-- Do NOT suggest Show HN, Product Hunt, launches, or heavy social media.
+Marketing tasks are shorter:
+- Cold outreach batch (10-15 DMs): 30 min
+- Forum replies (2-3 helpful answers): 30 min
+- Blog post writing (1000 words in one session): 60-90 min
+- Ship waitlist page: 60-90 min
+- Record demo video: 15-30 min
+- Edit demo video: 30-45 min
 
-WEEK 2 — Multi-Extrusion Parts + Grow Conversations:
-Product tasks:
-- "Build multi-extrusion: L-brackets (two extrusions at 90 degrees)"
-- "Build multi-extrusion: motor mounts (plate + raised boss/standoff)"
-- "Build multi-extrusion: simple enclosures (extrude + cut-extrude)"
-- "Test all multi-extrusion parts on degraded meshes, not just clean exports"
-- "Download 5 mechanical parts from Meshy, run through pipeline, identify failures"
-- "Add wider angular threshold for AI mesh plane detection"
-- "Download 3-5 real scan meshes from Artec 3D / Sketchfab, run through pipeline"
-- "Record first demo videos: 10-15 sec each, mesh in → parametric out → edit dimension"
-Marketing tasks:
-- "Continue 10-15 DMs/day, follow up with Week 1 responders"
-- "Once demo videos ready: include them in DMs for higher response rates"
-- "Write blog post #2 targeting 'mesh to Onshape' or 'reverse engineer STL to STEP'"
-- Do NOT suggest launches.
+**HARD RULE**: If the title contains "fix", "implement", "build", "add", "write script", "debug",
+  estimated_minutes MUST be >= 60. Typical minimum for product work is 90.
+**NEVER** output 30 or 45 min for a coding/debugging task. Only marketing tasks get those values.
 
-WEEK 3 — Beta Testing + Full Landing Page:
-Product tasks (4-5 hours — some time shifts to marketing):
-- "Review every failed conversion from Week 2, fix most common failure modes"
-- "Add clear error messages for unsupported geometry"
-- "Give 10-15 beta testers access, ask each to convert one part from their workflow"
-- "Collect feedback: 'Did it work? What broke? What would make this useful?'"
-- "Start AI assistant MVP: natural language to FeatureScript parameter update"
-Marketing tasks (2 hours/day):
-- "Build full landing page: hero + demo video, 3-4 looping demos, how-it-works, pricing, CTA"
-- "Pricing: Free (5 conversions), Pro ($29/mo, 30 conversions), Pay-as-you-go ($2-3/conversion)"
-- "Collect 2-3 testimonials from beta testers, add to landing page"
-- "Draft Product Hunt ship page: 5 screenshots, GIF demo, tagline, maker story"
-- "Draft Show HN post: technical, honest, focused on engineering problem"
-- "Draft Reddit posts for r/onshape, r/cad, r/3Dprinting (tailored to each)"
-- "Write blog post #3 targeting 'Backflip AI alternative' or 'AI mesh to CAD tool'"
+EXAMPLE of a CORRECT response for a 2-hour day:
+[
+  {"title": "Fix chamfer/fillet detection on degraded mesh normals", "estimated_minutes": 120, "priority_score": 9.5, "why": "...", "project_tag": "parameshai"},
+  {"title": "Send 10-15 cold DMs to Onshape users with mesh pain", "estimated_minutes": 30, "priority_score": 7, "why": "...", "project_tag": "parameshai"}
+]
+Notice: only 2 tasks because the chamfer fix REALISTICALLY takes 2h. Do not compress to fit.
 
-WEEK 4 — Launch:
-- "Launch on Product Hunt at 12:01 AM PT (Tuesday)"
-- "Post Show HN at 9 AM ET"
-- "Post to r/onshape, r/cad, r/3Dprinting throughout the day"
-- "LinkedIn launch post tagging beta testers who gave testimonials"
-- "DM everyone on beta list and outreach list: 'We just launched'"
-- "Email waitlist: 'ParameshAI is live — here's your free account'"
-- "Respond personally to every comment on PH, HN, and Reddit"
-- "Post Day 1 results update on LinkedIn"
-- "Blog post #4: launch retrospective — 'I built a mesh-to-CAD tool and launched in 4 weeks'"
-- "Record 'Getting Started' tutorial video for new signups"
-- "Analyze: where did signups come from? Top channel? Conversion success rate?"
+EXAMPLE of an INCORRECT response (do not do this):
+[
+  {"title": "Fix chamfer detection", "estimated_minutes": 45, "priority_score": 9},  // WRONG — coding task is never 45 min
+  {"title": "Implement cut-extrude", "estimated_minutes": 60, "priority_score": 9},  // WRONG — new feature is never 60 min
+  {"title": "Write scan simulation script", "estimated_minutes": 30, "priority_score": 8}  // WRONG — script takes 60-120 min
+]
+
+STAGE-DRIVEN FOCUS:
+The context includes a CURRENT STAGE block (1-4) with what to focus on and what is OFF-LIMITS.
+Follow it strictly. Do NOT generate launch/Show HN/Product Hunt/heavy-marketing tasks unless the stage
+explicitly says distribution is in launch mode. When the stage is early, the product is not ready, so the
+bulk of tasks are pipeline/engineering work and any outreach is the quiet, educational kind the stage allows.
+
+Good PRODUCT task examples (phrase to match the founder's actual code and blockers in context):
+- "Fix chamfer/fillet detection on degraded mesh normals"
+- "Implement cut-extrude: parallel plane pair detection for pockets"
+- "Run real scan meshes through the pipeline, fix the top failure mode"
+- "Add decimation as the first pipeline stage (target 20-50K triangles)"
+Stage-appropriate OUTREACH task examples (only what the stage permits):
+- Early stages: "Find 5 r/onshape or r/cad posts about mesh-to-CAD pain and write genuinely helpful replies (no product mention), save the posters as leads"
+- Beta/launch stages only: recruiting testers, demo-video DMs, drafting/posting launch materials
 
 Each task must:
 - Have a SPECIFIC, actionable title (not vague)
 - Explain WHY it matters for the plan
-- Have a realistic time estimate matching the daily time split
+- Use REALISTIC time estimates from the baselines above (coding tasks are NEVER 30 min)
 - Be tagged to the right project using slugs from context
+
+If a user has only 2 hours today, it's better to have 1 real product task (120 min) + outreach (30 min)
+than to cram 4 underestimated tasks that won't actually finish.
 
 Scoring guide (priority_score 0-10):
 - 9-10: Critical pipeline work blocking the plan (Weeks 1-2) or launch tasks (Week 4)
@@ -151,19 +140,16 @@ def generate_priority_tasks(
 
     available_minutes = available_hours * 60
 
-    # Determine which week of the 4-week marketing plan we're in
-    # Plan started ~April 4, 2026
-    from datetime import date
-    plan_start = date(2026, 4, 8)
-    days_since_start = (date.today() - plan_start).days
-    current_week = min(4, max(1, (days_since_start // 7) + 1))
+    # Current stage drives focus (replaces the old calendar-week math).
+    from agents.stage import get_stage, stage_name, context_block as _stage_context
+    current_stage = get_stage(db)
 
     context = {
         "date": datetime.utcnow().isoformat(),
         "day_of_week": today_day,
-        "marketing_plan_week": current_week,
-        "available_hours_today": available_hours,
-        "available_minutes_today": available_minutes,
+        "current_stage": current_stage,
+        "stage_name": stage_name(current_stage),
+        "stage_context": _stage_context(db),
         "projects": [
             {
                 "name": p.name,
@@ -184,18 +170,34 @@ def generate_priority_tasks(
         ],
     }
 
-    # Adjust task count based on available time
+    # Adjust task count based on available time (MAX — Claude can return fewer)
     if available_hours == 0:
         # Day off — no tasks
         return []
     elif available_hours <= 2:
-        n = 3  # light day
+        n = 3  # up to 3 tasks max (might be just 1 big coding task + outreach)
     elif available_hours <= 4:
-        n = 5  # normal day
+        n = 5
     else:
-        n = 7  # heavy day
+        n = 7
 
-    tasks_data = reason_json(PRIORITIZE_PROMPT + f"\n\nIMPORTANT: The user has {available_hours} hours ({available_minutes} minutes) available today ({today_day}). Generate tasks that total APPROXIMATELY {available_minutes} minutes. If 0 hours, return an empty array.", context=context)
+    task_instruction = f"""
+
+IMPORTANT: The user has {available_hours} hours ({available_minutes} minutes) available today ({today_day}).
+
+USE REALISTIC TIME ESTIMATES — do NOT compress them to fit the daily budget.
+A chamfer fix is 90-120 min whether the user has 2 hours or 8 hours.
+If a single realistic task takes all their time, return fewer tasks.
+
+Budget guidance:
+- 2h available: often 1 realistic product task (90-120 min) + outreach (30 min). That's 2 tasks, not 3.
+- 4h available: 2-3 product tasks (totaling ~3h) + outreach (30 min) + content (30 min)
+- 6h+: full stack — 3-4 product + outreach + content
+
+The estimated_minutes field must reflect HOW LONG THE TASK ACTUALLY TAKES, not how much time is left in the day.
+If estimates exceed available time, that's fine — the user will pick the highest priority ones."""
+
+    tasks_data = reason_json(PRIORITIZE_PROMPT + task_instruction, context=context)
 
     # Remove old AI-generated pending tasks (replace, don't stack)
     old_ai_tasks = (

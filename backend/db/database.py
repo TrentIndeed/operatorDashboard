@@ -227,9 +227,36 @@ class Lead(Base):
     source_url = Column(String)
     sentiment = Column(String)  # positive | neutral | negative
     category = Column(String, default="curious")  # hot | warm | curious
-    status = Column(String, default="new")  # new | contacted | converted | dismissed
+    status = Column(String, default="new")  # new | contacted | responded | interested | beta_user | paying | not_interested | no_response | skip
     suggested_action = Column(Text)
     dm_draft = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    # Outreach Command Center fields
+    tier = Column(Integer)  # 1 (hot), 2 (warm), 3 (curious)
+    tier_reason = Column(Text)
+    account_summary = Column(Text)  # Claude-generated bullet points
+    draft_dm = Column(Text)  # Claude-generated DM draft
+    draft_public_reply = Column(Text)  # Claude-generated public reply
+    include_demo_video = Column(Text)  # "yes" or "no" with reasoning
+    post_text = Column(Text)  # full text of their post
+    post_url = Column(String)  # direct link to their post
+    profile_url = Column(String)
+    post_date = Column(DateTime)
+    contacted_at = Column(DateTime)
+    responded_at = Column(DateTime)
+    follow_up_sent = Column(Boolean, default=False)
+    notes = Column(Text)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class OutreachMessage(Base):
+    __tablename__ = "outreach_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, index=True)
+    direction = Column(String, nullable=False)  # "outbound" or "inbound"
+    message_type = Column(String, nullable=False)  # "dm", "public_reply", "follow_up"
+    message_text = Column(Text, nullable=False)
+    sent_at = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -277,6 +304,13 @@ class User(Base):
     weekly_hours = Column(String, default='{"mon":2,"tue":2,"wed":2,"thu":2,"fri":2,"sat":0,"sun":0}')
     # Persistent notes the mentor remembers (user texts "note: ..." to add)
     mentor_notes = Column(Text, default="")
+    # Product stage 1-4 (drives all AI advice). 1 = building core pipeline (default).
+    # NOT a calendar week — set by the founder / inferred from the codebase.
+    startup_stage = Column(Integer, default=1)
+    stage_updated_at = Column(DateTime)
+    # Living description of what the founder is building (replaces hardcoded paragraphs).
+    # Refreshed from the real repo by the codebase digest.
+    startup_profile = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -299,6 +333,22 @@ class AgentMemory(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class CodebaseSnapshot(Base):
+    """A digest of the founder's actual product repo (e.g. meshToParametric).
+
+    Generated where the code lives (locally) and pushed to the cloud DB so the
+    bot — which runs on the VPS and can't see the local filesystem — can still
+    understand what's actually being built and how far along it is.
+    """
+    __tablename__ = "codebase_snapshots"
+    id = Column(Integer, primary_key=True, index=True)
+    summary = Column(Text)        # compact human/AI-readable digest, dropped into prompts
+    detail = Column(Text)         # fuller JSON blob (commits, signals, tree)
+    commit_sha = Column(String)   # HEAD sha at digest time
+    source = Column(String, default="local")  # "local" | "github" | "manual"
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 def get_db():
     db = SessionLocal()
     try:
@@ -307,5 +357,28 @@ def get_db():
         db.close()
 
 
+def _migrate_columns():
+    """Add columns introduced after a DB was first created.
+
+    SQLAlchemy's create_all() only creates missing *tables*, never missing
+    *columns*. These ALTER statements are idempotent (guarded by try/except)
+    so they're safe to run on every startup.
+    """
+    from sqlalchemy import text
+    migrations = [
+        "ALTER TABLE users ADD COLUMN startup_stage INTEGER DEFAULT 1",
+        "ALTER TABLE users ADD COLUMN stage_updated_at DATETIME",
+        "ALTER TABLE users ADD COLUMN startup_profile TEXT DEFAULT ''",
+    ]
+    with engine.begin() as conn:
+        for stmt in migrations:
+            try:
+                conn.execute(text(stmt))
+            except Exception:
+                # Column already exists (or table not present yet) — ignore.
+                pass
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+    _migrate_columns()

@@ -29,6 +29,7 @@ from api.billing import router as billing_router
 from api.settings import router as settings_router
 from api.sms_webhook import router as sms_router
 from api.support_chat import router as support_router
+from api.outreach import router as outreach_router
 
 
 @asynccontextmanager
@@ -79,6 +80,7 @@ app.include_router(billing_router)
 app.include_router(settings_router)
 app.include_router(sms_router)
 app.include_router(support_router)
+app.include_router(outreach_router)
 
 
 # --- Background task wrappers (create their own DB sessions) ---
@@ -526,6 +528,15 @@ def _bg_autonomous_generate():
 
     db = SessionLocal()
     try:
+        # Refresh the codebase digest if the product repo is on this machine.
+        # (On the VPS it isn't — a local push keeps the stored digest fresh instead.)
+        try:
+            from agents.codebase_digest import refresh_if_local
+            if refresh_if_local(db):
+                print("[GenerateAll] Refreshed codebase digest from local repo")
+        except Exception as e:
+            print(f"[GenerateAll] Codebase digest refresh skipped: {e}")
+
         snapshot = get_snapshot(db)
         result = run_autonomous_generate(snapshot)
 
@@ -563,37 +574,53 @@ def _bg_autonomous_generate():
             db.commit()
             print(f"[GenerateAll] Wrote {len(tasks_data)} tasks")
 
-        # --- Write suggestions ---
+        # --- Write suggestions (replace, don't pile up) ---
         suggestions_data = data.get("suggestions", [])
-        for s in suggestions_data[:5]:
-            if not isinstance(s, dict):
-                continue
-            db.add(AISuggestion(
-                body=s.get("body", ""),
-                category=s.get("category"),
-            ))
         if suggestions_data:
+            # Old suggestions accumulated forever and made the dashboard feel repetitive.
+            # Clear undismissed ones before writing the fresh batch.
+            db.query(AISuggestion).filter(AISuggestion.dismissed == False).delete()
+            for s in suggestions_data[:5]:
+                if not isinstance(s, dict):
+                    continue
+                db.add(AISuggestion(
+                    body=s.get("body", ""),
+                    category=s.get("category"),
+                ))
             db.commit()
-            print(f"[GenerateAll] Wrote {len(suggestions_data)} suggestions")
+            print(f"[GenerateAll] Wrote {len(suggestions_data)} suggestions (replaced old)")
 
-        # --- Write briefing ---
+        # --- Write briefing (dedup against the past week) ---
         briefing_data = data.get("briefing", [])
         if briefing_data:
             today_str = date.today().isoformat()
             db.query(NewsBriefing).filter(NewsBriefing.briefing_date == today_str).delete()
+            # Don't re-surface a headline already shown in the last 7 days.
+            week_ago = datetime.utcnow() - timedelta(days=7)
+            recent_headlines = {
+                (h or "").strip().lower()
+                for (h,) in db.query(NewsBriefing.headline)
+                .filter(NewsBriefing.created_at >= week_ago).all()
+            }
+            written = 0
             for b in briefing_data[:5]:
                 if not isinstance(b, dict):
                     continue
+                headline = b.get("headline", "")
+                if headline.strip().lower() in recent_headlines:
+                    continue
                 db.add(NewsBriefing(
-                    headline=b.get("headline", ""),
+                    headline=headline,
                     summary=b.get("summary"),
                     category=b.get("category"),
                     relevance_score=float(b.get("relevance_score", 0.5)),
                     suggested_action=b.get("suggested_action"),
                     briefing_date=today_str,
                 ))
+                recent_headlines.add(headline.strip().lower())
+                written += 1
             db.commit()
-            print(f"[GenerateAll] Wrote {len(briefing_data)} briefing items")
+            print(f"[GenerateAll] Wrote {written}/{len(briefing_data)} briefing items (deduped)")
 
         # --- Write market gaps ---
         gaps_data = data.get("market_gaps", [])
@@ -708,6 +735,15 @@ def _bg_autonomous_generate():
             pass
 
         print("[GenerateAll] Autonomous generation complete")
+
+        # Auto-send daily briefing email
+        try:
+            from services.email_composer import compose_daily_briefing
+            from services.email_sender import send_email
+            subject, html, text = compose_daily_briefing(db)
+            send_email(subject=subject, html=html, text=text)
+        except Exception as e:
+            print(f"[GenerateAll] Email send failed: {e}")
 
     except Exception as e:
         print(f"[GenerateAll] Error: {e}")
@@ -907,9 +943,9 @@ def send_mentor_message(body: dict, db: Session = Depends(get_db)):
     """Send a growth mentor message using the autonomous agent (with fallback)."""
     _check_ai_endpoint_limit()
 
-    message_type = body.get("type", "morning")
-    if message_type not in ("morning", "midday", "afternoon", "evening"):
-        raise HTTPException(status_code=400, detail="Type must be: morning, midday, afternoon, evening")
+    message_type = body.get("type", "daily")
+    if message_type not in ("daily", "morning", "midday", "afternoon", "evening"):
+        raise HTTPException(status_code=400, detail="Type must be: daily, morning, midday, afternoon, evening")
 
     # --- Phase 1: Try autonomous agent ---
     try:
@@ -977,6 +1013,7 @@ def send_mentor_message(body: dict, db: Session = Depends(get_db)):
         except Exception:
             pass
 
+    from agents.stage import context_block as _stage_context_block
     msg = generate_mentor_message(
         message_type=message_type,
         tasks=[{"title": t.title, "estimated_minutes": t.estimated_minutes, "priority_score": t.priority_score, "project_tag": t.project_tag} for t in tasks],
@@ -987,9 +1024,120 @@ def send_mentor_message(body: dict, db: Session = Depends(get_db)):
         completed_tasks=[{"title": t.title} for t in completed_tasks_today],
         recent_commits=recent_commits,
         mentor_notes=user.mentor_notes or "" if user else "",
+        context_block=_stage_context_block(db),
     )
 
     return _send_mentor_telegram(msg, message_type, db, agent_mode="fallback")
+
+
+# --- Stage + Codebase (what the bot understands about the startup) ---
+
+@app.get("/stage")
+def get_current_stage(db: Session = Depends(get_db)):
+    """Current product stage + the proposed stage inferred from the latest codebase digest."""
+    from agents.stage import get_stage, stage_name, STAGES
+    from db.database import CodebaseSnapshot
+    import json as _json
+
+    cur = get_stage(db)
+    proposed, proposed_reason = None, ""
+    snap = db.query(CodebaseSnapshot).order_by(CodebaseSnapshot.id.desc()).first()
+    if snap and snap.detail:
+        try:
+            detail = _json.loads(snap.detail)
+            proposed = detail.get("proposed_stage")
+            sig = detail.get("signals", {})
+            proposed_reason = (
+                f"Latest commits look like {max(sig, key=sig.get) if sig else 'pipeline'} work; "
+                f"landing dir: {detail.get('has_landing')}, tests: {detail.get('has_tests')}."
+            )
+        except Exception:
+            pass
+
+    return {
+        "stage": cur,
+        "stage_name": stage_name(cur),
+        "ladder": {i: STAGES[i]["name"] for i in (1, 2, 3, 4)},
+        "proposed_stage": proposed,
+        "proposed_reason": proposed_reason,
+        "needs_confirmation": bool(proposed and proposed != cur),
+    }
+
+
+@app.post("/stage")
+def set_current_stage(body: dict, db: Session = Depends(get_db)):
+    """Founder confirms / sets the current stage. This drives all AI advice."""
+    from agents.stage import set_stage, stage_name
+    try:
+        n = int(body.get("stage"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="stage must be an integer 1-4")
+    stored = set_stage(db, n)
+    return {"stage": stored, "stage_name": stage_name(stored)}
+
+
+@app.get("/codebase/snapshot")
+def get_codebase_snapshot(db: Session = Depends(get_db)):
+    """Latest stored digest of the product repo."""
+    from db.database import CodebaseSnapshot
+    snap = db.query(CodebaseSnapshot).order_by(CodebaseSnapshot.id.desc()).first()
+    if not snap:
+        return {"exists": False}
+    return {
+        "exists": True,
+        "summary": snap.summary,
+        "commit_sha": snap.commit_sha,
+        "source": snap.source,
+        "created_at": snap.created_at.isoformat() if snap.created_at else None,
+    }
+
+
+@app.post("/codebase/snapshot")
+def push_codebase_snapshot(body: dict, db: Session = Depends(get_db)):
+    """
+    Store a codebase digest.
+
+    Two modes:
+    - Local backend: POST {} and the server reads ../meshToParametric directly.
+    - Cloud backend (VPS, can't see the repo): a local script generates the digest
+      and POSTs {"summary","detail","commit_sha","proposed_stage"} here.
+    """
+    from agents.codebase_digest import generate_digest, save_digest
+
+    if body and body.get("summary"):
+        digest = {
+            "summary": body.get("summary", ""),
+            "detail": body.get("detail", {}),
+            "commit_sha": body.get("commit_sha", ""),
+            "proposed_stage": body.get("proposed_stage"),
+        }
+        save_digest(db, digest, source=body.get("source", "manual"))
+        return {"stored": True, "source": body.get("source", "manual"), "commit_sha": digest["commit_sha"]}
+
+    # No body → try to read the repo locally.
+    digest = generate_digest()
+    if not digest:
+        raise HTTPException(
+            status_code=400,
+            detail="No repo found on this machine (set MESH_REPO_PATH) and no digest in the request body.",
+        )
+    save_digest(db, digest, source="local")
+    return {"stored": True, "source": "local", "commit_sha": digest["commit_sha"], "proposed_stage": digest.get("proposed_stage")}
+
+
+@app.post("/email/send-briefing")
+def send_briefing_email(db: Session = Depends(get_db)):
+    """Compose and send the daily briefing email directly from current DB state."""
+    from services.email_composer import compose_daily_briefing
+    from services.email_sender import send_email
+    try:
+        subject, html, text = compose_daily_briefing(db)
+        sent = send_email(subject=subject, html=html, text=text)
+        return {"sent": sent, "subject": subject}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"sent": False, "error": str(e)}
 
 
 @app.get("/health")
