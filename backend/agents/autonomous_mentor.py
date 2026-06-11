@@ -154,13 +154,17 @@ YOUR PREVIOUS MESSAGES (don't repeat yourself):
 {memory}
 
 Analyze what's ACTUALLY in this snapshot. Don't mention external facts, competitor news, or anything not listed above.
-Anchor on the REAL signal: the recent code changes and the founder's recent Claude prompts above. That is what they're actually working on right now.
-The dashboard task list is often stale and arbitrary. Do NOT just nag them about old todo items. If a task contradicts what the code and recent prompts show, ignore the task.
+
+HOW TO READ THE SIGNALS (this is critical, get it right):
+- "RECENTLY COMPLETED" commits are DONE work. A burst of commits about a topic means that topic was just FINISHED. NEVER call a recently-committed area the "open priority" or "highest-priority open item". That is the mistake to avoid.
+- The OPEN PRIORITIES list (unchecked items from the repo's own TODO/plan docs) is the real source of what's NEXT. Lead with that.
+- "IN PROGRESS" uncommitted files + the LAST recent prompt = what they're mid-stream on right now.
+- The dashboard task list is stale and arbitrary. Ignore it when it conflicts with the above.
+
 Focus on:
-- What they're mid-stream on right now, based on the recent diffs and recent prompts
-- What they shipped (or didn't) based on git and completed tasks
-- The single most useful next move given that real work and the current stage
-- If they're stuck on the same thing across several prompts/commits, name it and suggest how to unblock
+- The single most useful next move, drawn from the OPEN PRIORITIES list and what they're mid-stream on, given the current stage
+- Acknowledge in one line what they just shipped (the recent commits) without calling it open work
+- If the OPEN PRIORITIES list is empty and the code/prompts don't make the next step obvious, say what they're mid-stream on and ask what's next instead of inventing a priority
 
 IMPORTANT about time estimates: pipeline/coding work takes longer than the task list shows.
 A "chamfer fix" is really 90-120 min once you include debugging. A "cut-extrude feature" is 2-4h.

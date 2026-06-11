@@ -144,7 +144,9 @@ def _recent_diff(path: Path, days: int, max_chars: int) -> str:
         rng = "HEAD~3..HEAD"  # quiet week: show the last few commits anyway
 
     excludes = [":(exclude)*.lock", ":(exclude)*.log", ":(exclude)out.txt",
-                ":(exclude)*.svg", ":(exclude)package-lock.json", ":(exclude)*.ipynb"]
+                ":(exclude)*.svg", ":(exclude)package-lock.json", ":(exclude)*.ipynb",
+                ":(exclude)*.png", ":(exclude)*.jpg", ":(exclude)*.jpeg",
+                ":(exclude)tests/visual_reports/*", ":(exclude)_render_out/*", ":(exclude)models/*"]
     stat = _git(path, ["diff", "--stat", rng])
     patch = _git(path, ["diff", rng, "--", ".", *excludes])
     uncommitted = _git(path, ["diff", "--", ".", *excludes])
@@ -159,6 +161,90 @@ def _recent_diff(path: Path, days: int, max_chars: int) -> str:
     out = out.strip()
     if len(out) > max_chars:
         out = out[:max_chars] + "\n[... diff truncated to fit budget ...]"
+    return out
+
+
+def _plan_docs(path: Path) -> list[Path]:
+    """Planning docs in the repo root or docs/ (TODO, roadmap, handoff, plan, next)."""
+    out = []
+    for d in (path, path / "docs"):
+        if d.is_dir():
+            for f in d.glob("*.md"):
+                n = f.name.lower()
+                if any(k in n for k in ("todo", "roadmap", "next", "plan", "handoff", "tasks")):
+                    out.append(f)
+    # TODO/roadmap first (they hold the actual priority list), then others
+    out.sort(key=lambda f: (0 if any(k in f.name.lower() for k in ("todo", "roadmap")) else 1, f.name.lower()))
+    return out
+
+
+def _open_items(path: Path, limit: int = 12) -> list[str]:
+    """
+    Unchecked checklist items ('- [ ] ...') from the repo's own planning docs.
+    THIS is the real open-priority signal, vs commit history which is trailing
+    (a burst of commits about X means X was just FINISHED, not that X is open).
+    """
+    items, seen = [], set()
+    for f in _plan_docs(path):
+        try:
+            txt = f.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        for ln in txt.splitlines():
+            s = ln.strip()
+            low = s.lower()
+            if low.startswith("- [ ]") or low.startswith("* [ ]"):
+                t = re.sub(r"[*_`]", "", s[5:]).strip()
+                t = " ".join(t.split())[:180]
+                if t and t not in seen:
+                    seen.add(t)
+                    items.append(f"{f.name}: {t}")
+                    if len(items) >= limit:
+                        return items
+    return items
+
+
+def _in_progress_files(path: Path, limit: int = 12) -> list[str]:
+    """Uncommitted code files = what's literally being worked on right now."""
+    out = []
+    for line in _git(path, ["status", "--porcelain"]).splitlines():
+        if len(line) < 4:
+            continue
+        f = line[3:].strip().strip('"')
+        low = f.lower()
+        if low.endswith((".png", ".jpg", ".jpeg", ".svg", ".lock", ".log")):
+            continue
+        if "visual_reports" in low or "_render_out" in low or low.startswith("models/"):
+            continue
+        out.append(f)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _todo_markers(path: Path, limit: int = 6) -> list[str]:
+    """TODO/FIXME/HACK markers in source (.py only, to skip launch-gated UI noise)."""
+    out = []
+    skip = {".git", "node_modules", ".venv", "venv", "__pycache__", "tests",
+            "_render_out", "models", ".pytest_cache", "docs"}
+    pat = re.compile(r"\b(TODO|FIXME|HACK)\b[:\s]?(.*)")
+    for root, dirs, files in os.walk(path):
+        dirs[:] = [d for d in dirs if d not in skip and not d.startswith(".")]
+        for fn in files:
+            if not fn.endswith(".py"):
+                continue
+            fp = Path(root) / fn
+            try:
+                lines = fp.read_text(encoding="utf-8", errors="replace").splitlines()
+            except Exception:
+                continue
+            for i, ln in enumerate(lines, 1):
+                m = pat.search(ln)
+                if m:
+                    txt = (m.group(2).strip() or ln.strip())[:100]
+                    out.append(f"{fp.relative_to(path)}:{i}: {txt}")
+                    if len(out) >= limit:
+                        return out
     return out
 
 
@@ -302,27 +388,32 @@ def generate_digest(repo_path: str | None = None) -> dict | None:
     signals = _signal_counts(commit_subjects)
     proposed = heuristic_stage(signals, has_landing, has_tests)
 
-    # The two high-signal additions: actual recent code changes + recent Claude prompts.
+    # High-signal additions: actual code changes, recent prompts, and crucially the
+    # FORWARD-looking signals (open TODO items, in-progress files) so the bot can tell
+    # what's OPEN vs what was just FINISHED.
     recent_changes = _recent_diff(path, DIFF_DAYS, DIFF_MAX_CHARS)
     recent_prompts = extract_recent_prompts(path)
+    open_items = _open_items(path)
+    in_progress = _in_progress_files(path)
+    markers = _todo_markers(path)
 
-    # Compact summary dropped into every prompt. Includes recent Claude prompts
-    # (small + high-signal) so the bot knows what's actually being worked on,
-    # not stale dashboard todos. The bigger diff lives in detail.recent_changes.
-    recent = "\n".join(commit_lines[:8]) or "- (no commits found)"
-    prompts_block = (
-        "\n".join(f"  - \"{p}\"" for p in recent_prompts)
-        if recent_prompts else "  (none found)"
-    )
+    # newest commits first; these are DONE work, not open priorities
+    done = "\n".join(commit_lines[:8]) or "- (no commits found)"
+    prompts_block = "\n".join(f"  - \"{p}\"" for p in recent_prompts) or "  (none found)"
+    open_block = "\n".join(f"  - {x}" for x in open_items) or "  (no open checklist items found in TODO/plan docs)"
+    inprog_block = ", ".join(in_progress) or "(nothing uncommitted)"
+    markers_block = "\n".join(f"  - {m}" for m in markers) or "  (none)"
+
     summary = (
         f"Repo: {path.name} (branch {branch}, HEAD {head}). "
         f"{commits_14d} commits in the last 14 days, ~{code_files} source files.\n"
         f"README says: {intro or 'n/a'}\n"
-        f"Top-level dirs: {', '.join(top_dirs) or 'n/a'}. "
-        f"Tests dir: {'yes' if has_tests else 'no'}. Landing/frontend dir: {'yes' if has_landing else 'no'}.\n"
-        f"Recent commits:\n{recent}\n"
-        f"What the founder has actually been asking Claude to do lately (most recent last, this is the real focus, trust it over the dashboard task list):\n{prompts_block}\n"
-        f"Signal read: most recent commits look like {'core pipeline / bug-fixing' if signals['pipeline'] >= signals['beta'] and signals['pipeline'] >= signals['launch'] else ('beta/landing work' if signals['beta'] >= signals['launch'] else 'launch prep')}."
+        f"\nRECENTLY COMPLETED (newest commits first). This work is DONE. A cluster of "
+        f"commits about a topic means that topic was just FINISHED, NOT that it is the open priority:\n{done}\n"
+        f"\nIN PROGRESS right now (uncommitted code files): {inprog_block}\n"
+        f"\nWHAT THE FOUNDER HAS BEEN ASKING CLAUDE FOR (oldest first, LAST line = current focus):\n{prompts_block}\n"
+        f"\nOPEN PRIORITIES from the repo's own planning docs (unchecked items, trust these over commit history for what's NEXT):\n{open_block}\n"
+        f"\nOpen code markers (TODO/FIXME):\n{markers_block}"
     )
 
     detail = {
@@ -337,6 +428,9 @@ def generate_digest(repo_path: str | None = None) -> dict | None:
         "signals": signals,
         "recent_commits": commit_subjects[:20],
         "recent_prompts": recent_prompts,
+        "open_items": open_items,
+        "in_progress": in_progress,
+        "todo_markers": markers,
         "recent_changes": recent_changes,
         "readme_intro": intro,
         "proposed_stage": proposed,

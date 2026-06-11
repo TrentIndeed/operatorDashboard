@@ -208,7 +208,9 @@ Recently completed: {done_lines}
 Goals: {goal_lines}
 Git activity: {commit_lines}
 
-GROUND TRUTH: the grounding block above includes the founder's recent code changes and recent Claude prompts. Generate tasks that CONTINUE that actual work, not the stale existing task list. If the existing tasks don't match what the code and prompts show, replace them with what genuinely comes next.
+GROUND TRUTH (read carefully): the grounding block above separates RECENTLY COMPLETED work (commits, already DONE), IN PROGRESS files, recent Claude prompts, and OPEN PRIORITIES (unchecked items from the repo's own TODO/plan docs).
+- Generate tasks from the OPEN PRIORITIES list and what's IN PROGRESS, NOT from the completed commits. A topic with many recent commits was just FINISHED, do not re-add it.
+- The existing dashboard tasks are stale, replace them with what genuinely comes next per the open priorities.
 
 REMINDER: Do NOT invent competitor news or feature releases. If you use web search, only report verified results with real URLs. Prefer empty arrays over hallucinated content.
 
