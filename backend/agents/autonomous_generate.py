@@ -203,10 +203,12 @@ than 4 underestimated tasks that won't finish.
 
 CURRENT STATE:
 Projects: {project_lines}
-Current tasks: {task_lines}
+Existing tasks (these are often STALE and arbitrary, do not just rewrite them): {task_lines}
 Recently completed: {done_lines}
 Goals: {goal_lines}
 Git activity: {commit_lines}
+
+GROUND TRUTH: the grounding block above includes the founder's recent code changes and recent Claude prompts. Generate tasks that CONTINUE that actual work, not the stale existing task list. If the existing tasks don't match what the code and prompts show, replace them with what genuinely comes next.
 
 REMINDER: Do NOT invent competitor news or feature releases. If you use web search, only report verified results with real URLs. Prefer empty arrays over hallucinated content.
 
@@ -216,11 +218,11 @@ OPTIONAL research (skip if you can't find reliable results):
 - Skip competitor research entirely unless you find a real, datable news article
 
 GENERATE:
-- tasks: {task_count} prioritized tasks for today based on the week focus and current state (or empty array if day off)
+- tasks: {task_count} prioritized tasks for today that continue the founder's ACTUAL recent work (recent diffs + recent Claude prompts) and fit the current stage (or empty array if day off)
 - suggestions: 3-5 growth suggestions tied to the founder's current situation (no need to be fancy — simple and actionable)
 - briefing: 0-5 items, ONLY if you can verify them with real search results. Empty array is fine.
 - market_gaps: 0-5 items, ONLY if you found real communities/posts. Include the actual URL in source_url. Empty array is fine.
-- content_drafts: 2 drafts (1 short-form for TikTok/YouTube Shorts, 1 longer for LinkedIn/YouTube/blog) based on the founder's actual product and week
+- content_drafts: 2 drafts (1 short-form for TikTok/YouTube Shorts, 1 longer for LinkedIn/YouTube/blog) based on the founder's actual product and current stage
 
 Your final response must be ONLY the JSON object. No markdown, no explanation."""
 

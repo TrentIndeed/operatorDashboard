@@ -132,7 +132,7 @@ def get_snapshot(db: Session) -> dict:
         "stage": stage,
         "stage_name": stage_name(stage),
         "stage_block": stage_block(stage),
-        "context_block": context_block(db),
+        "context_block": context_block(db, include_diff=True),
         "stage_check": stage_check_line(db),
         "tasks": {
             "pending": [

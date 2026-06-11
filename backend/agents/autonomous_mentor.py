@@ -154,18 +154,19 @@ YOUR PREVIOUS MESSAGES (don't repeat yourself):
 {memory}
 
 Analyze what's ACTUALLY in this snapshot. Don't mention external facts, competitor news, or anything not listed above.
+Anchor on the REAL signal: the recent code changes and the founder's recent Claude prompts above. That is what they're actually working on right now.
+The dashboard task list is often stale and arbitrary. Do NOT just nag them about old todo items. If a task contradicts what the code and recent prompts show, ignore the task.
 Focus on:
+- What they're mid-stream on right now, based on the recent diffs and recent prompts
 - What they shipped (or didn't) based on git and completed tasks
-- What's most urgent given the week of the plan
-- Which specific task they should do next and why
-- If they're behind on outreach or non-negotiables, call it out
+- The single most useful next move given that real work and the current stage
+- If they're stuck on the same thing across several prompts/commits, name it and suggest how to unblock
 
 IMPORTANT about time estimates: pipeline/coding work takes longer than the task list shows.
 A "chamfer fix" is really 90-120 min once you include debugging. A "cut-extrude feature" is 2-4h.
 Don't tell the user they can stack 3 product tasks in 2h. Pick ONE realistic thing and finish it.
-If the task list itself underestimates, say so: "that chamfer fix is probably 2h, not 1h, plan accordingly".
 
-After your research, compose a {message_type} Telegram message.
+After your research, compose your one daily Telegram message.
 Your FINAL response must be ONLY the message text — nothing else. No JSON, no explanation."""
 
     print(f"[Agent] Starting autonomous {message_type} analysis (max-turns: {AGENT_MAX_TURNS})")

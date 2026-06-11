@@ -35,9 +35,13 @@ def _save_message(db, role: str, content: str):
         db.commit()
 
 
-def _get_chat_history(db) -> str:
-    """Get recent chat history formatted for Claude."""
-    messages = db.query(ChatMessage).order_by(ChatMessage.id.desc()).limit(MAX_HISTORY * 2).all()
+def _get_chat_history(db, limit_msgs: int = 16) -> str:
+    """Get recent chat history formatted for Claude (last `limit_msgs` exchanges).
+
+    We store more than we inject: storage keeps MAX_HISTORY for continuity, but
+    the prompt only needs the recent tail so it stays well under the prompt cap.
+    """
+    messages = db.query(ChatMessage).order_by(ChatMessage.id.desc()).limit(limit_msgs).all()
     messages.reverse()
     if not messages:
         return ""

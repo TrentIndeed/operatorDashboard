@@ -149,6 +149,19 @@ def _latest_digest_summary(db) -> str:
     return ""
 
 
+def _latest_recent_changes(db) -> str:
+    """The actual recent code diff from the latest digest, if present."""
+    import json as _json
+    try:
+        from db.database import CodebaseSnapshot
+        snap = db.query(CodebaseSnapshot).order_by(CodebaseSnapshot.id.desc()).first()
+        if snap and snap.detail:
+            return (_json.loads(snap.detail).get("recent_changes") or "").strip()
+    except Exception:
+        pass
+    return ""
+
+
 def proposed_stage(db) -> tuple[int | None, str]:
     """
     Stage the latest codebase digest suggests, with a short reason. Returns
@@ -192,10 +205,15 @@ def profile_text(db) -> str:
     return profile or DEFAULT_PROFILE
 
 
-def context_block(db, include_digest: bool = True) -> str:
+def context_block(db, include_digest: bool = True, include_diff: bool = False) -> str:
     """
     The full grounding block every agent prepends: what's being built + the
     real current stage + (if available) the actual codebase state.
+
+    include_diff=True also appends the recent code diff. Use it only on the
+    Claude-CLI-subprocess paths (autonomous mentor/generate), which have no
+    8K prompt cap. The _call_claude paths (sms, fallback, tasks) leave it off
+    and rely on the compact summary (which already includes recent prompts).
 
     This is the one function that replaces all the scattered hardcoded
     "ParameshAI ... 4-week plan ... Week N" paragraphs.
@@ -207,5 +225,13 @@ def context_block(db, include_digest: bool = True) -> str:
     if include_digest:
         digest = _latest_digest_summary(db)
         if digest:
-            parts.append(f"LATEST CODEBASE STATE (from the actual repo, trust this over assumptions):\n{digest}")
+            parts.append(
+                "LATEST CODEBASE STATE (from the actual repo and the founder's recent Claude prompts). "
+                "This is the GROUND TRUTH of what they're working on right now. The dashboard task list "
+                "can be stale, so when it conflicts with this, trust this and steer off this:\n" + digest
+            )
+        if include_diff:
+            changes = _latest_recent_changes(db)
+            if changes:
+                parts.append("RECENT CODE CHANGES (actual diffs from the last couple days):\n" + changes)
     return "\n\n".join(parts)

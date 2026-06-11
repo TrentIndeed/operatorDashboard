@@ -68,7 +68,10 @@ _call_timestamps: list[float] = []
 
 # Limits
 MAX_CALLS_PER_HOUR = int(os.getenv("AI_MAX_CALLS_PER_HOUR", "30"))
-MAX_PROMPT_CHARS = int(os.getenv("AI_MAX_PROMPT_CHARS", "8000"))
+# Raised from 8000: the grounding block now carries the codebase digest + recent
+# Claude prompts, which is high-value context we don't want truncated. Abuse is
+# already bounded by the hourly call limit, so a larger single-user prompt is fine.
+MAX_PROMPT_CHARS = int(os.getenv("AI_MAX_PROMPT_CHARS", "16000"))
 MAX_CONTEXT_CHARS = int(os.getenv("AI_MAX_CONTEXT_CHARS", "12000"))
 
 # Prompt injection patterns to strip
