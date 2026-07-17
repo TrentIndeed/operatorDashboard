@@ -4,7 +4,7 @@
 
 AI-powered solo founder command center focused on **business growth**. Dark mission-control UI. Claude CLI as the AI backend — no API keys, uses OAuth from Claude Max subscription.
 
-**Live at**: https://dragonoperator.com (VPS: 5.161.100.230, Hetzner CX11, Ashburn VA)
+**Live at**: https://dragonoperator.com (VPS: YOUR_VPS_IP)
 
 ## Stack
 

@@ -2,7 +2,7 @@
 # Refresh Claude CLI credentials on the VPS from your local machine
 # Run this when you get an auth expired alert
 
-VPS_IP="${1:-5.161.100.230}"
+VPS_IP="${1:-YOUR_VPS_IP}"
 
 echo "Copying Claude credentials to VPS ($VPS_IP)..."
 scp ~/.claude/.credentials.json root@$VPS_IP:/root/.claude/.credentials.json
