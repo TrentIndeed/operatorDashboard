@@ -1,5 +1,8 @@
 # Operator Dashboard
 
+![Operator Dashboard - Outreach Command Center](docs/screenshot.png)
+*The outreach command center: lead tiers, conversation tracking, and AI drafting.*
+
 AI-powered command center for solo founders focused on **business growth**. Dark mission-control aesthetic. Claude as the reasoning engine.
 
 Every morning, Claude analyzes your projects, goals, and GitHub commits — then generates prioritized tasks (weighted toward outreach, networking, and content creation), content drafts, market opportunities, and a daily email briefing. Tasks fit your weekly availability schedule automatically.
